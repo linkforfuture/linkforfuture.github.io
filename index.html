@@ -3,50 +3,252 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Linkforfuture · 学习笔记</title>
+  <title>Linkforfuture · 个人主页</title>
   <style>
+    :root {
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --ink: #1f2328;
+      --muted: #656d76;
+      --line: #e6e8eb;
+      --indigo: #6366f1;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --radius: 14px;
+      --shadow-sm: 0 1px 2px rgba(31, 35, 40, .04);
+      --shadow-md: 0 8px 24px rgba(31, 35, 40, .08);
+    }
+
     * { box-sizing: border-box; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 48px 24px;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
       line-height: 1.7;
-      color: #24292f;
-      background: #f6f8fa;
+      -webkit-font-smoothing: antialiased;
     }
-    h1 { font-size: 1.8em; margin: 0 0 4px; }
-    .sub { color: #57606a; margin: 0 0 32px; }
-    a { text-decoration: none; color: inherit; display: block; }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ===== Hero ===== */
+    .hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #0ea5e9 130%);
+      color: #fff;
+      padding: 72px 24px 64px;
+      text-align: center;
+    }
+    .hero .avatar {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .18);
+      border: 2px solid rgba(255, 255, 255, .5);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      margin-bottom: 18px;
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 2.1em;
+      letter-spacing: .5px;
+    }
+    .hero .tagline {
+      margin: 0;
+      font-size: 1.05em;
+      color: rgba(255, 255, 255, .85);
+    }
+    .hero .badges {
+      margin-top: 22px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .hero .badge {
+      font-size: .82em;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .14);
+      border: 1px solid rgba(255, 255, 255, .25);
+    }
+
+    /* ===== Layout ===== */
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    .section { margin-bottom: 44px; }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .section-head .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 1.3em;
+      letter-spacing: .3px;
+    }
+    .section-head .count {
+      font-size: .82em;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
     .card {
-      background: #fff;
-      border: 1px solid #d0d7de;
-      border-radius: 8px;
-      padding: 20px 24px;
-      margin-bottom: 16px;
-      transition: border-color .15s, box-shadow .15s;
+      display: block;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px 22px 20px;
+      box-shadow: var(--shadow-sm);
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
     }
-    a:hover .card { border-color: #0969da; box-shadow: 0 4px 12px rgba(140, 149, 159, .15); }
-    .card h2 { margin: 0 0 6px; font-size: 1.15em; color: #0969da; }
-    .card p { margin: 0; color: #57606a; font-size: .95em; }
+    a.card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+      border-color: #c7cbd1;
+    }
+    .card .icon { font-size: 26px; margin-bottom: 12px; }
+    .card h3 { margin: 0 0 6px; font-size: 1.08em; font-weight: 600; }
+    .card p { margin: 0; font-size: .92em; color: var(--muted); }
+    .card .tag {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: .76em;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #f0f1f4;
+      color: #4b5563;
+    }
+
+    /* 板块专属点缀色 */
+    .s-learning .dot { background: var(--indigo); }
+    .s-learning a.card:hover { border-color: #c7c5f7; }
+    .s-learning .tag { background: #eef0ff; color: #4f46e5; }
+
+    .s-work .dot { background: var(--emerald); }
+    .s-work a.card:hover { border-color: #a7f3d0; }
+    .s-work .tag { background: #ecfdf5; color: #059669; }
+
+    .s-writing .dot { background: var(--amber); }
+    .s-writing a.card:hover { border-color: #fde68a; }
+    .s-writing .tag { background: #fffbeb; color: #b45309; }
+
+    /* 占位卡片 */
+    .card.placeholder {
+      cursor: default;
+      border-style: dashed;
+      background: transparent;
+      box-shadow: none;
+    }
+    a.card.placeholder:hover {
+      transform: none;
+      box-shadow: none;
+      border-color: #c7cbd1;
+    }
+    .card.placeholder p { font-style: italic; }
+
+    footer {
+      text-align: center;
+      padding: 28px 24px 44px;
+      color: var(--muted);
+      font-size: .85em;
+    }
+    footer a { color: #4f46e5; }
   </style>
 </head>
 <body>
-  <h1>Linkforfuture 学习笔记</h1>
-  <p class="sub">Hello-Agents 相关学习内容整理</p>
 
-  <a href="XCCL/study.html">
-    <div class="card">
-      <h2>XCCL · 集合通信学习笔记</h2>
-      <p>alltoall、GPU SM、DeepEP、overlap、prefill/decode、KV Cache 通信等图解</p>
+  <header class="hero">
+    <div class="avatar">🌱</div>
+    <h1>Linkforfuture</h1>
+    <p class="tagline">记录学习、工作与思考 · 持续生长</p>
+    <div class="badges">
+      <span class="badge">📚 学习笔记</span>
+      <span class="badge">💼 工作需求</span>
+      <span class="badge">✍️ 随笔</span>
     </div>
-  </a>
+  </header>
 
-  <a href="shape_flow_diagram.html">
-    <div class="card">
-      <h2>shape 流水线 · 输入穿过 Transformer</h2>
-      <p>shape 数据流示意图</p>
-    </div>
-  </a>
+  <main>
+
+    <section class="section s-learning">
+      <div class="section-head">
+        <span class="dot"></span>
+        <h2>学习内容</h2>
+        <span class="count">2 篇</span>
+      </div>
+      <div class="cards">
+        <a class="card" href="XCCL/study.html">
+          <div class="icon">🛰️</div>
+          <h3>XCCL · 集合通信学习笔记</h3>
+          <p>alltoall、GPU SM、DeepEP、overlap、prefill/decode、KV Cache 通信等图解</p>
+          <span class="tag">深度学习</span>
+        </a>
+        <a class="card" href="shape_flow_diagram.html">
+          <div class="icon">🔀</div>
+          <h3>shape 流水线 · 输入穿过 Transformer</h3>
+          <p>shape 数据流示意图</p>
+          <span class="tag">Transformer</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section s-work">
+      <div class="section-head">
+        <span class="dot"></span>
+        <h2>工作需求</h2>
+        <span class="count">0 篇</span>
+      </div>
+      <div class="cards">
+        <div class="card placeholder">
+          <div class="icon">📌</div>
+          <h3>这里将记录工作中的需求</h3>
+          <p>完成的需求、踩过的坑、沉淀的方案，之后慢慢补充。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section s-writing">
+      <div class="section-head">
+        <span class="dot"></span>
+        <h2>随笔</h2>
+        <span class="count">0 篇</span>
+      </div>
+      <div class="cards">
+        <div class="card placeholder">
+          <div class="icon">🖋️</div>
+          <h3>这里将写下一些随笔</h3>
+          <p>零散的思考、读书记录、生活碎碎念，随手记在这里。</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    © 2026 Linkforfuture · 由 <a href="https://pages.github.com" target="_blank" rel="noopener">GitHub Pages</a> 驱动
+  </footer>
+
 </body>
 </html>
