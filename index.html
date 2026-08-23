@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linkforfuture · 学习笔记</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px;
+      line-height: 1.7;
+      color: #24292f;
+      background: #f6f8fa;
+    }
+    h1 { font-size: 1.8em; margin: 0 0 4px; }
+    .sub { color: #57606a; margin: 0 0 32px; }
+    a { text-decoration: none; color: inherit; display: block; }
+    .card {
+      background: #fff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    a:hover .card { border-color: #0969da; box-shadow: 0 4px 12px rgba(140, 149, 159, .15); }
+    .card h2 { margin: 0 0 6px; font-size: 1.15em; color: #0969da; }
+    .card p { margin: 0; color: #57606a; font-size: .95em; }
+  </style>
+</head>
+<body>
+  <h1>Linkforfuture 学习笔记</h1>
+  <p class="sub">Hello-Agents 相关学习内容整理</p>
+
+  <a href="XCCL/study.html">
+    <div class="card">
+      <h2>XCCL · 集合通信学习笔记</h2>
+      <p>alltoall、GPU SM、DeepEP、overlap、prefill/decode、KV Cache 通信等图解</p>
+    </div>
+  </a>
+
+  <a href="shape_flow_diagram.html">
+    <div class="card">
+      <h2>shape 流水线 · 输入穿过 Transformer</h2>
+      <p>shape 数据流示意图</p>
+    </div>
+  </a>
+</body>
+</html>

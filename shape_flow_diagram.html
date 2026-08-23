@@ -1,0 +1,358 @@
+<title>shape 流水线 · 输入穿过 Transformer</title>
+<style>
+  :root{
+    --bg:#f4f7fc; --surface:#ffffff; --surface-2:#ebf0f8; --chip:#ffffff;
+    --ink:#16233f; --muted:#5b6b8c; --line:#c7d2e4; --line-2:#e1e8f3;
+    --d-b:#7c89a6; --d-h:#7a5aa8; --d-s:#0f7fb8; --d-w:#a86a12; --d-v:#c1354f;
+    --chg:#c1354f; --matrix-bg:rgba(193,53,79,.07);
+    --sans:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono","JetBrains Mono",Consolas,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0c1226; --surface:#141b31; --chip:#182238; --surface-2:#1b2440;
+      --ink:#e8edf7; --muted:#93a0be; --line:#2b3754; --line-2:#212c46;
+      --d-b:#8e9bb5; --d-h:#b29be8; --d-s:#58b6f5; --d-w:#ffb84d; --d-v:#ff7ba4;
+      --chg:#ff7ba4; --matrix-bg:rgba(255,123,164,.14);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c1226; --surface:#141b31; --chip:#182238; --surface-2:#1b2440;
+    --ink:#e8edf7; --muted:#93a0be; --line:#2b3754; --line-2:#212c46;
+    --d-b:#8e9bb5; --d-h:#b29be8; --d-s:#58b6f5; --d-w:#ffb84d; --d-v:#ff7ba4;
+    --chg:#ff7ba4; --matrix-bg:rgba(255,123,164,.14);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6}
+  main{max-width:1280px;margin:0 auto;padding:48px 24px 80px}
+
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  h1{font-size:clamp(26px,4vw,40px);line-height:1.25;margin:0 0 16px;text-wrap:balance;letter-spacing:-.01em}
+  h1 .mono{font-family:var(--mono);color:var(--d-s);font-weight:700}
+  .lede{font-size:16px;color:var(--muted);max-width:72ch;margin:0 0 18px}
+  .meta{font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:inline-flex;flex-wrap:wrap;gap:6px 18px}
+  .meta b{color:var(--d-w);font-weight:700}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:28px 0 6px}
+  .legend .hint{width:100%;font-size:12px;color:var(--muted);margin:0 0 2px}
+  .lchip{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid var(--line);border-radius:999px;background:var(--chip);font-size:13px;cursor:default;outline:none;transition:border-color .12s ease,box-shadow .12s ease}
+  .lchip:focus-visible,.lchip:hover{border-color:var(--muted);box-shadow:0 0 0 3px color-mix(in srgb,var(--d-s) 15%,transparent)}
+  .lchip .sw{width:12px;height:12px;border-radius:3px;flex:none}
+  .lchip code{font-family:var(--mono);font-size:12px}
+  .lchip[data-dim="b"] .sw{background:var(--d-b)}
+  .lchip[data-dim="h"] .sw{background:var(--d-h)}
+  .lchip[data-dim="s"] .sw{background:var(--d-s)}
+  .lchip[data-dim="w"] .sw{background:var(--d-w)}
+  .lchip[data-dim="v"] .sw{background:var(--d-v)}
+  .lchip[data-dim="mat"] .sw{background:var(--matrix-bg);border:1.5px solid var(--d-v)}
+  .lchip[data-dim="chg"] .sw{background:transparent;color:var(--chg);text-align:center;line-height:12px}
+
+  figure{margin:24px 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  figure svg{display:block;width:100%;height:auto;min-width:1080px;color:var(--ink)}
+  figcaption{font-size:12.5px;color:var(--muted);max-width:92ch;margin-top:10px}
+
+  .points{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:40px 0 8px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .card .num{font-family:var(--mono);font-size:12px;color:var(--chg);letter-spacing:.08em;margin:0 0 6px}
+  .card h3{margin:0 0 8px;font-size:15.5px}
+  .card p{margin:0;font-size:13.5px;color:var(--muted)}
+  .card code{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--surface-2);padding:1px 5px;border-radius:5px}
+  .rest{grid-column:1/-1}
+
+  footer{margin-top:36px;font-size:12px;color:var(--muted)}
+  footer a{color:var(--d-s);text-decoration:none;border-bottom:1px solid var(--line)}
+
+  /* ---------- SVG internals ---------- */
+  svg text{font-family:var(--sans)}
+  svg .shape{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+  svg .p{fill:var(--muted)}
+  svg .d-b{fill:var(--d-b)} svg .d-h{fill:var(--d-h)} svg .d-s{fill:var(--d-s)}
+  svg .d-w{fill:var(--d-w)} svg .d-v{fill:var(--d-v)}
+  .tlabel{font-size:14px;font-weight:600}
+  .tnote{font-size:11px;fill:var(--muted)}
+  .tracktitle{font-size:13px;font-weight:600;fill:var(--muted);letter-spacing:.04em}
+  .quiet{font-size:10.5px;fill:var(--muted);font-style:italic}
+  .ctitle{font-size:13px;font-weight:600}
+  .cnote{font-size:11px;fill:var(--muted)}
+  .chip-op{font-size:10px;fill:var(--muted);letter-spacing:.02em}
+  .chip .rect{fill:var(--chip);stroke:var(--line);stroke-width:1.2}
+  .chip.coral-edge .rect{stroke:var(--chg);stroke-width:1.8}
+  .chip.matrix .rect{fill:var(--matrix-bg);stroke:var(--d-v);stroke-width:1.4}
+  .chg-pill{fill:var(--matrix-bg);stroke:var(--chg);stroke-width:1.2}
+  .chg-text{font-size:11px;fill:var(--chg);font-weight:600}
+
+  svg.hl-b .d-b,svg.hl-h .d-h,svg.hl-s .d-s,svg.hl-w .d-w,svg.hl-v .d-v{
+    font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;text-decoration-color:currentColor
+  }
+  svg.hl-mat .chip.matrix .rect{stroke-width:2.6}
+  svg.hl-chg .chg-pill{stroke-width:2.6}
+  svg.hl-chg .chip.coral-edge .rect{stroke-width:2.6}
+</style>
+
+<main>
+  <p class="kicker">Transformer Internals · Shape Flow</p>
+  <h1>一个批次穿过 Transformer，<span class="mono">shape</span> 怎么变</h1>
+  <p class="lede">把 [transfer.py](transfer.py) 里编码器 + 解码器的每条路径展开成流水线：绝大多数层入口、出口都是 <b>(batch, seq, d_model)</b>，真正改变 shape 的只有 3 处。下面这条图按 shape_flow.ipynb 的实际运行结果绘制。</p>
+  <div class="meta"><span>batch = 2</span><span>src_len = 6</span><span>tgt_len = 5</span><span>d_model = <b>8</b></span><span>num_heads = 2</span><span>d_k = <b>4</b></span><span>d_ff = <b>16</b></span><span>VOCAB = 12</span><span>num_layers = 1</span></div>
+
+  <div class="legend">
+    <p class="hint">悬停图例，可在图中高亮对应的维度：</p>
+    <div class="chip" data-dim="b" tabindex="0"><span class="sw"></span><code>B</code> 批次</div>
+    <div class="chip" data-dim="s" tabindex="0"><span class="sw"></span><code>S</code> 序列</div>
+    <div class="chip" data-dim="h" tabindex="0"><span class="sw"></span><code>H</code> 头</div>
+    <div class="chip" data-dim="w" tabindex="0"><span class="sw"></span><code>D</code> 特征宽度 <span style="color:var(--muted)">(d_model·d_k·d_ff)</span></div>
+    <div class="chip" data-dim="v" tabindex="0"><span class="sw"></span><code>V</code> 词表</div>
+    <div class="chip" data-dim="mat" tabindex="0"><span class="sw sq"></span>注意力矩阵</div>
+    <div class="chip" data-dim="chg" tabindex="0"><span class="sw">◆</span>shape 变化点</div>
+  </div>
+
+  <figure>
+    <svg id="fig" viewBox="0 0 1640 714" role="img" aria-label="一个 batch=2 的批次穿过编码器与解码器时张量 shape 的完整流水线；灰=批次、紫=头、蓝=序列、琥珀=特征宽度、玫红=词表，珊瑚 ◆ 标注 shape 变化的 3 处位置">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+        <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+          <path d="M32 0H0V32" fill="none" stroke="currentColor" stroke-opacity="0.05"/>
+        </pattern>
+      </defs>
+
+      <rect width="1640" height="714" fill="url(#grid)"/>
+
+      <!-- 图例提示 -->
+      <text class="quiet" x="1200" y="30" text-anchor="end">batch=2：两条序列并行，各维互不共享</text>
+
+      <!-- ================= 编码器路径 ================= -->
+      <text class="tracktitle" x="40" y="46">编码器路径 · src → memory</text>
+
+      <!-- src -->
+      <g class="tbox">
+        <rect x="40" y="106" width="140" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="110" y="130" text-anchor="middle">src 输入序列</text>
+        <text class="shape" x="110" y="160" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">)</tspan></text>
+        <text class="tnote" x="110" y="181" text-anchor="middle">token id ∈ [0,12)</text>
+      </g>
+
+      <!-- embedding -->
+      <g class="tbox">
+        <rect x="228" y="106" width="170" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="313" y="130" text-anchor="middle">embedding</text>
+        <text class="shape" x="313" y="160" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+        <text class="tnote" x="313" y="181" text-anchor="middle">token → 向量</text>
+      </g>
+      <g class="chg">
+        <rect class="chg-pill" x="257" y="200" width="112" height="24" rx="12"/>
+        <text class="chg-text" x="313" y="216" text-anchor="middle">◆ 新增 D 维</text>
+      </g>
+
+      <!-- + positional encoding -->
+      <g class="tbox">
+        <rect x="446" y="106" width="130" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="511" y="130" text-anchor="middle">+ 位置编码</text>
+        <text class="shape" x="511" y="160" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+      </g>
+      <text class="quiet" x="511" y="202" text-anchor="middle">shape 不变</text>
+
+      <!-- 多头自注意力容器 -->
+      <g class="container">
+        <rect x="624" y="70" width="540" height="148" rx="14" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text class="ctitle" x="646" y="94">多头自注意力 &nbsp;Q = K = V = x</text>
+        <g class="chg">
+          <rect class="chg-pill" x="1084" y="76" width="72" height="22" rx="11"/>
+          <text class="chg-text" x="1120" y="91" text-anchor="middle">4D 绕行</text>
+        </g>
+
+        <g class="chip"><rect class="rect" x="646" y="146" width="76" height="46" rx="8"/>
+          <text class="chip-op" x="684" y="163" text-anchor="middle">W·x</text>
+          <text class="shape" x="684" y="184" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip coral-edge"><rect class="rect" x="732" y="146" width="76" height="46" rx="8"/>
+          <text class="chip-op" x="770" y="163" text-anchor="middle">split_heads</text>
+          <text class="shape" x="770" y="184" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-h">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">4</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip matrix"><rect class="rect" x="818" y="146" width="76" height="46" rx="8"/>
+          <text class="chip-op" x="856" y="163" text-anchor="middle">Q·Kᵀ/√dₖ</text>
+          <text class="shape" x="856" y="184" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-h">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip"><rect class="rect" x="904" y="146" width="76" height="46" rx="8"/>
+          <text class="chip-op" x="942" y="163" text-anchor="middle">softmax ·V</text>
+          <text class="shape" x="942" y="184" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-h">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">4</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip coral-edge"><rect class="rect" x="990" y="146" width="76" height="46" rx="8"/>
+          <text class="chip-op" x="1028" y="163" text-anchor="middle">combine_h</text>
+          <text class="shape" x="1028" y="184" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip"><rect class="rect" x="1076" y="146" width="76" height="46" rx="8"/>
+          <text class="chip-op" x="1114" y="163" text-anchor="middle">W_o</text>
+          <text class="shape" x="1114" y="184" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <text class="cnote" x="894" y="234" text-anchor="middle">split_heads：d_model 8 → (heads 2, d_k 4)，张量变 4 维；combine_heads 拼回 3 维</text>
+        <text class="cnote" x="894" y="250" text-anchor="middle">注意力矩阵 Q·Kᵀ/√dₖ → (2,2,6,6)：Q、K 同长 → 方阵 □</text>
+      </g>
+
+      <!-- FFN -->
+      <g class="tbox">
+        <rect x="1212" y="106" width="130" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="1277" y="130" text-anchor="middle">FFN</text>
+        <text class="shape" x="1277" y="160" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+      </g>
+      <text class="quiet" x="1277" y="202" text-anchor="middle">临时扩到 d_ff=16 再缩回</text>
+
+      <!-- memory -->
+      <g class="tbox">
+        <rect x="1390" y="106" width="170" height="88" rx="12" fill="var(--surface)" stroke="var(--d-s)" stroke-dasharray="4 3"/>
+        <text class="tlabel" x="1475" y="130" text-anchor="middle">memory（编码器输出）</text>
+        <text class="shape" x="1475" y="160" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+        <text class="tnote" x="1475" y="181" text-anchor="middle">↓ 作交叉注意力的 K、V</text>
+      </g>
+
+      <!-- 编码器箭头 -->
+      <g stroke="currentColor" stroke-width="1.6" fill="none">
+        <line x1="180" y1="150" x2="228" y2="150" marker-end="url(#ah)"/>
+        <line x1="398" y1="150" x2="446" y2="150" marker-end="url(#ah)"/>
+        <line x1="576" y1="150" x2="624" y2="150" marker-end="url(#ah)"/>
+        <line x1="1164" y1="150" x2="1212" y2="150" marker-end="url(#ah)"/>
+        <line x1="1342" y1="150" x2="1390" y2="150" marker-end="url(#ah)"/>
+      </g>
+
+      <!-- memory → 交叉注意力 -->
+      <path d="M1475 194 C1475 330 1002 330 1002 486" fill="none" stroke="var(--d-s)" stroke-width="1.8" marker-end="url(#ah)"/>
+      <text class="cnote" x="1238" y="318" text-anchor="middle">K、V 来自编码器的 memory</text>
+
+      <!-- ================= 解码器路径 ================= -->
+      <text class="tracktitle" x="40" y="462">解码器路径 · tgt → logits</text>
+
+      <!-- tgt -->
+      <g class="tbox">
+        <rect x="40" y="516" width="140" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="110" y="540" text-anchor="middle">tgt 输入序列</text>
+        <text class="shape" x="110" y="570" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">)</tspan></text>
+        <text class="tnote" x="110" y="591" text-anchor="middle">token id ∈ [0,12)</text>
+      </g>
+
+      <!-- embedding -->
+      <g class="tbox">
+        <rect x="228" y="516" width="170" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="313" y="540" text-anchor="middle">embedding</text>
+        <text class="shape" x="313" y="570" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+      </g>
+      <g class="chg">
+        <rect class="chg-pill" x="257" y="610" width="112" height="24" rx="12"/>
+        <text class="chg-text" x="313" y="626" text-anchor="middle">◆ 新增 D 维</text>
+      </g>
+
+      <!-- + positional encoding -->
+      <g class="tbox">
+        <rect x="446" y="516" width="130" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="511" y="540" text-anchor="middle">+ 位置编码</text>
+        <text class="shape" x="511" y="570" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+      </g>
+      <text class="quiet" x="511" y="614" text-anchor="middle">shape 不变</text>
+
+      <!-- 掩码自注意力 -->
+      <g class="tbox">
+        <rect x="624" y="516" width="130" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="689" y="540" text-anchor="middle">自注意力 · 因果掩码</text>
+        <text class="shape" x="689" y="570" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+      </g>
+      <text class="quiet" x="689" y="614" text-anchor="middle">内部 Q·Kᵀ (2,2,5,5) · 只看前面</text>
+
+      <!-- 交叉注意力容器 -->
+      <g class="container">
+        <rect x="802" y="486" width="400" height="148" rx="14" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text class="ctitle" x="824" y="510">交叉注意力 &nbsp;Q←解码器 · K、V←memory</text>
+        <g class="chg">
+          <rect class="chg-pill" x="1108" y="492" width="72" height="22" rx="11"/>
+          <text class="chg-text" x="1144" y="507" text-anchor="middle">4D 绕行</text>
+        </g>
+
+        <g class="chip coral-edge"><rect class="rect" x="824" y="562" width="80" height="46" rx="8"/>
+          <text class="chip-op" x="864" y="579" text-anchor="middle">Q: W_q(x)</text>
+          <text class="shape" x="864" y="600" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-h">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-w">4</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip"><rect class="rect" x="916" y="562" width="80" height="46" rx="8"/>
+          <text class="chip-op" x="956" y="579" text-anchor="middle">K,V: W(mem)</text>
+          <text class="shape" x="956" y="600" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-h">2</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">, </tspan><tspan class="d-w">4</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip matrix"><rect class="rect" x="1008" y="562" width="80" height="46" rx="8"/>
+          <text class="chip-op" x="1048" y="579" text-anchor="middle">Q·Kᵀ/√dₖ</text>
+          <text class="shape" x="1048" y="600" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-h">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-s">6</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <g class="chip coral-edge"><rect class="rect" x="1100" y="562" width="80" height="46" rx="8"/>
+          <text class="chip-op" x="1140" y="579" text-anchor="middle">·V + combine</text>
+          <text class="shape" x="1140" y="600" text-anchor="middle" font-size="12"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+        </g>
+        <text class="cnote" x="1002" y="650" text-anchor="middle">注意力矩阵 (2,2,5,6)：tgt_len=5 行 × src_len=6 列 → 非方阵 ▭</text>
+      </g>
+
+      <!-- FFN -->
+      <g class="tbox">
+        <rect x="1250" y="516" width="130" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="1315" y="540" text-anchor="middle">FFN</text>
+        <text class="shape" x="1315" y="570" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-w">8</tspan><tspan class="p">)</tspan></text>
+      </g>
+      <text class="quiet" x="1315" y="614" text-anchor="middle">临时扩到 d_ff=16</text>
+
+      <!-- fc_out -->
+      <g class="tbox">
+        <rect x="1428" y="516" width="170" height="88" rx="12" fill="var(--surface)" stroke="var(--line)"/>
+        <text class="tlabel" x="1513" y="540" text-anchor="middle">fc_out → logits</text>
+        <text class="shape" x="1513" y="570" text-anchor="middle" font-size="16"><tspan class="p">(</tspan><tspan class="d-b">2</tspan><tspan class="p">, </tspan><tspan class="d-s">5</tspan><tspan class="p">, </tspan><tspan class="d-v">12</tspan><tspan class="p">)</tspan></text>
+        <text class="tnote" x="1513" y="591" text-anchor="middle">每个位置 12 个候选打分</text>
+      </g>
+      <g class="chg">
+        <rect class="chg-pill" x="1461" y="610" width="104" height="24" rx="12"/>
+        <text class="chg-text" x="1513" y="626" text-anchor="middle">◆ D → 词表</text>
+      </g>
+
+      <!-- 解码器箭头 -->
+      <g stroke="currentColor" stroke-width="1.6" fill="none">
+        <line x1="180" y1="560" x2="228" y2="560" marker-end="url(#ah)"/>
+        <line x1="398" y1="560" x2="446" y2="560" marker-end="url(#ah)"/>
+        <line x1="576" y1="560" x2="624" y2="560" marker-end="url(#ah)"/>
+        <line x1="754" y1="560" x2="802" y2="560" marker-end="url(#ah)"/>
+        <line x1="1202" y1="560" x2="1250" y2="560" marker-end="url(#ah)"/>
+        <line x1="1380" y1="560" x2="1428" y2="560" marker-end="url(#ah)"/>
+      </g>
+    </svg>
+    <figcaption>一个批次 (batch=2) 穿过编码器与解码器时张量 shape 的完整流水线。灰=批次 B，紫=头 H，蓝=序列 S，琥珀=特征宽度 D（d_model·d_k·d_ff），玫红=词表 V；珊瑚 ◆ 是 shape 真正变化的 3 处位置。</figcaption>
+  </figure>
+
+  <section class="points">
+    <article class="card">
+      <p class="num">01</p>
+      <h3>embedding：新增 D 维</h3>
+      <p>(batch, seq) → <code>(batch, seq, d_model)</code>。每个 token id 变成 d_model 维向量，之后整条路径都带着这条"宽度"。</p>
+    </article>
+    <article class="card">
+      <p class="num">02</p>
+      <h3>多头注意力内部：4D 绕行</h3>
+      <p>split_heads 把 d_model 拆成 <code>(heads, d_k)</code>，注意力矩阵多出 <code>(q_len, k_len)</code> 维，combine_heads 再拼回 3 维。进出都是 <code>(batch, seq, d_model)</code>。</p>
+    </article>
+    <article class="card">
+      <p class="num">03</p>
+      <h3>fc_out：D → 词表</h3>
+      <p>(batch, tgt_len, d_model) → <code>(batch, tgt_len, tgt_vocab)</code>，每个位置给词表里 12 个候选各打一个分，接 CrossEntropyLoss。</p>
+    </article>
+    <article class="card rest">
+      <h3>其余全不变</h3>
+      <p>位置编码、残差、LayerNorm、前馈网络，入口出口都是 <code>(batch, seq, d_model)</code>；<code>num_layers</code> 只是把这个块重复 N 遍，不改变 shape。唯一"不同长度的碰面"发生在交叉注意力：Q 的 5 行对着 K 的 6 列，所以矩阵非方阵。</p>
+    </article>
+  </section>
+
+  <footer>来源：transfer.py · shape_flow.ipynb　—　想换一组数字？改 notebook 第 2 个单元格里的超参数重新运行，shape 会跟着变。</footer>
+</main>
+
+<script>
+  const fig = document.getElementById('fig');
+  document.querySelectorAll('.legend [data-dim]').forEach(chip => {
+    const dim = chip.dataset.dim;
+    const on  = () => fig.classList.add('hl-' + dim);
+    const off = () => fig.classList.remove('hl-' + dim);
+    chip.addEventListener('mouseenter', on);
+    chip.addEventListener('mouseleave', off);
+    chip.addEventListener('focus', on);
+    chip.addEventListener('blur', off);
+  });
+</script>

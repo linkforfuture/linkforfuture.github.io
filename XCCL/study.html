@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XCCL · 集合通信学习笔记</title>
+<style>
+  :root {
+    --bg: #FBFCFE;
+    --card: #FFFFFF;
+    --border: #E2E8F0;
+    --panel: #EEF3FA;
+    --ink: #16202B;
+    --ink2: #4A5A6A;
+    --muted: #8FA3B8;
+    --blue:  #4C9BE8;
+    --orange:#E08A1E;
+    --green: #258A50;
+    --purple:#7A4FA8;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.7;
+  }
+  .container { max-width: 1160px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* 顶部 */
+  header.hero {
+    text-align: center;
+    padding: 56px 0 8px;
+  }
+  header.hero h1 { font-size: 32px; margin: 0 0 6px; letter-spacing: .5px; }
+  header.hero .sub { color: var(--ink2); font-size: 16px; margin: 0 0 4px; }
+  header.hero .path { color: var(--muted); font-size: 13px; }
+
+  /* 目录 */
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin: 28px 0 36px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+  }
+  nav.toc a {
+    display: flex; align-items: center; gap: 10px;
+    text-decoration: none; color: var(--ink);
+    font-weight: 600; font-size: 14px;
+    padding: 8px 10px; border-radius: 8px;
+    transition: background .15s;
+  }
+  nav.toc a:hover { background: var(--panel); }
+  nav.toc .num {
+    flex: 0 0 26px; height: 26px; border-radius: 7px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #fff;
+  }
+
+  /* 小节 */
+  section.sec {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 30px 34px 34px;
+    margin-bottom: 30px;
+  }
+  section.sec h2 {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 23px; margin: 0 0 10px;
+  }
+  section.sec h2 .chip {
+    flex: 0 0 auto; min-width: 34px; height: 34px;
+    border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: #fff;
+  }
+  .intro { color: var(--ink2); font-size: 15px; margin: 0 0 18px; }
+  .intro b { color: var(--ink); }
+
+  .figure {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px;
+    margin-bottom: 18px;
+  }
+  .figure img { display: block; width: 100%; height: auto; border-radius: 8px; }
+  .figcap { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+  .keypoints {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px 14px 24px;
+  }
+  .keypoints .kp-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--ink); }
+  .keypoints ul { margin: 0; padding-left: 18px; }
+  .keypoints li { margin: 5px 0; font-size: 14px; color: var(--ink2); }
+  .keypoints li::marker { color: var(--blue); }
+
+  /* 底部 */
+  footer.next {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 26px 34px;
+  }
+  footer.next h3 { margin: 0 0 10px; font-size: 18px; }
+  footer.next ul { margin: 0; padding-left: 20px; color: var(--ink2); font-size: 14px; }
+  footer.next li { margin: 5px 0; }
+  footer.note { color: var(--muted); font-size: 13px; text-align: center; margin-top: 26px; }
+
+  .tag { display: inline-block; font-size: 12px; padding: 1px 9px; border-radius: 20px; background: var(--panel); color: var(--ink2); margin-left: 8px; vertical-align: 2px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero">
+    <h1>XCCL · 集合通信学习笔记</h1>
+    <p class="sub">从 All-to-All 出发 → 看懂 GPU 的 SM → 拆解 DeepEP 的优化 → 抽出通用的“重叠”套路</p>
+    <p class="path">XCCL/ · 全部图由 gen_*.py 脚本生成，改参数即可重画</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#alltoall"><span class="num" style="background:var(--orange)">1</span>All-to-All 基础</a>
+    <a href="#sm"><span class="num" style="background:var(--blue)">2</span>GPU 与 SM</a>
+    <a href="#deepep"><span class="num" style="background:var(--purple)">3</span>DeepEP 优化 All-to-All</a>
+    <a href="#overlap"><span class="num" style="background:var(--green)">4</span>通算重叠的通用模式</a>
+    <a href="#prefilldecode"><span class="num" style="background:#2BA49B">5</span>Prefill · Decode · KV Cache</a>
+    <a href="#kvcache"><span class="num" style="background:#D0506E">6</span>KV Cache 通信加速</a>
+  </nav>
+
+  <section class="sec" id="alltoall">
+    <h2><span class="chip" style="background:var(--orange)">1</span>All-to-All 基础</h2>
+    <p class="intro"><b>每个节点和所有节点交换数据</b>的最基础集合通信：4 卡时数据流共 n²=16 条，本质是对数据矩阵做一次“转置”。</p>
+    <div class="figure">
+      <img src="alltoall.svg" alt="AllToAll 集合通信示意图（4 卡）">
+      <p class="figcap">图中虚线圆点会流动，表示数据包方向（若看不到动画，直接打开 alltoall.svg 即可）</p>
+    </div>
+    <div class="keypoints">
+      <div class="kp-title">要点速记</div>
+      <ul>
+        <li>发送方把本地数据切成 <b>n</b> 份，各发一份给所有 <b>n</b> 个接收方（包括自己）；接收方从 n 个来源各收 1 份。</li>
+        <li>颜色 = 目标卡；每个分片上的 <code>→j</code> / <code>来自r</code> 标明了去向与来源。</li>
+        <li>与 Broadcast / Reduce 的区别：All-to-All <b>既发又收、且数据发生重排</b>。</li>
+        <li>每对卡数据量相等叫 <b>alltoall</b>；不等（如 MoE 的 token 路由）叫 <b>alltoallv</b>。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" id="sm">
+    <h2><span class="chip" style="background:var(--blue)">2</span>GPU 与 SM</h2>
+    <p class="intro"><b>SM（Streaming Multiprocessor）是 GPU 的“核”</b>：整卡由几十上百个 SM 组成，每个 SM 内含 Warp 调度器、CUDA core、共享内存与寄存器堆；kernel 被切成线程块分发给各 SM 执行。</p>
+    <div class="figure">
+      <img src="gpu_sm.svg" alt="GPU 与 SM 结构可视化">
+      <p class="figcap">整卡（H100 132 个 SM）→ 放大一个 SM → kernel 到线程块到 SM 的执行流程</p>
+    </div>
+    <div class="keypoints">
+      <div class="kp-title">要点速记</div>
+      <ul>
+        <li>层级：GPU → GPC → SM → CUDA core（“小兵”）。H100 有 132 个 SM，A100 108 个。</li>
+        <li>调度单位：<b>1 Warp = 32 个线程</b>，由调度器整组发射、整组执行。</li>
+        <li>kernel 被切为线程块，GigaThread 按<b>占用率</b>分发给 SM；占用率受共享内存 / 寄存器 / Warp 上限共同限制。</li>
+        <li>关键推论：一个 kernel 通常只占<b>部分</b> SM → 同一张卡上可并发多个 kernel —— 这正是 DeepEP 能重叠通信与计算的<b>硬件前提</b>。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" id="deepep">
+    <h2><span class="chip" style="background:var(--purple)">3</span>DeepEP 如何优化 All-to-All</h2>
+    <p class="intro">MoE 里的 all-to-all 是 <b>dispatch</b>（token 发给专家所在卡）+ <b>combine</b>（部分结果收回求和）。DeepEP 用 <b>SM 分区</b>把通信压到 4~6 个 SM 上、再<b>跨 micro-batch</b>与专家计算错位重叠，把通信从“串行停顿”变成“隐藏成本”。</p>
+    <div class="figure">
+      <img src="deepep_alltoall.svg" alt="DeepEP 如何优化 MoE 的 All-to-All">
+      <p class="figcap">背景（dispatch/combine）→ 优化① SM 分区 → 优化② 跨 micro-batch 时间线重叠 → 其余工程</p>
+    </div>
+    <div class="keypoints">
+      <div class="kp-title">要点速记</div>
+      <ul>
+        <li>通信 kernel 只占 <b>4~6 个 SM</b>，其余 SM 全给专家 FFN → 同一张卡内并行。</li>
+        <li>重叠的永远是<b>不同 micro-batch 的数据</b>：<code>dispatch(mb[i+1]) ∥ FFN(mb[i])</code>、<code>combine(mb[i-1]) ∥ FFN(mb[i])</code>。</li>
+        <li>依赖约束必须满足：<code>dispatch(mb[i])</code> 先于 <code>FFN(mb[i])</code>；<code>combine(mb[i])</code> 晚于 <code>FFN(mb[i])</code>。</li>
+        <li>其余工程：零拷贝（NVLink 直访对方显存）、NVLink + RDMA 两阶段转发、FP8 带宽减半、低延迟 decode kernel。</li>
+        <li>这是 <b>overlap（两个 kernel 并发）</b>，不是 <b>fusion（合成一个 kernel）</b>；combine 里的“接收 + 求和”算是融合。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" id="overlap">
+    <h2><span class="chip" style="background:var(--green)">4</span>通算重叠的通用模式</h2>
+    <p class="intro">DeepEP 只是<b>“把等数据藏进处理别的数据”</b>这个通用套路的一个实例。抽象成“取数据 → 处理 → 送出”三级流水线后，CPU 预取、CUDA 双缓冲、训练流水线、DeepEP 是<b>同一个套路</b>的四个面孔。</p>
+    <div class="figure">
+      <img src="overlap_pattern.svg" alt="通算重叠的通用模式">
+      <p class="figcap">上半：抽象流水线三级错位；下半：四个具体系统与抽象模式的对应</p>
+    </div>
+    <div class="keypoints">
+      <div class="kp-title">要点速记</div>
+      <ul>
+        <li>口诀：<code>Fetch(i+1) ∥ Process(i) ∥ Send(i-1)</code> —— 三者各忙各的数据，互不等待。</li>
+        <li>四实例对照：CPU 预取、CUDA 双缓冲、训练流水线（forward/backward）、DeepEP（dispatch/FFN/combine）。</li>
+        <li>代价：需要 ≥2 份数据在飞（内存翻倍），流水线首尾有填充/排空气泡。</li>
+        <li>一句话：把“数据还没到”的空档，用“处理另一份数据”填上 —— 这就是 overlap 的秘密。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" id="prefilldecode">
+    <h2><span class="chip" style="background:#2BA49B">5</span>Prefill · Decode · KV Cache 概念</h2>
+    <p class="intro"><b>一次请求分两段</b>：Prefill 并行算完整段 prompt（计算密集）并产出 <b>KV cache</b>；Decode 逐 token 自回归生成（访存密集），每一步都要读 KV cache。KV cache 是这两个阶段之间的“交接货物”。</p>
+    <div class="figure">
+      <img src="prefill_decode.svg" alt="Prefill · Decode · KV Cache 概念">
+      <p class="figcap">上半：一次请求的生命周期；下半：三张概念卡</p>
+    </div>
+    <div class="keypoints">
+      <div class="kp-title">要点速记</div>
+      <ul>
+        <li><b>Prefill</b>：并行处理整段 prompt，计算密集、突发到达；产出第一个 token + KV cache；指标看 <b>TTFT</b>。</li>
+        <li><b>Decode</b>：逐 token 自回归，访存密集、每步读几 GB KV；延迟敏感；指标看 <b>ITL / TPOT</b>。</li>
+        <li><b>KV cache</b>：本请求各 token 的 K/V，按 请求 × 位置 × 层 × head 记录；随 <b>并发 × 上下文长度</b>增长，与词表无关。</li>
+        <li>为什么要缓存：decode 每步都要对全部历史做 attention，缓存免去每步重算整段历史。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" id="kvcache">
+    <h2><span class="chip" style="background:#D0506E">6</span>KV Cache 通信加速</h2>
+    <p class="intro"><b>KV cache 是分布式推理里通信原语要搬的“持久载荷”</b>：大（GB/请求）、持久、首包延迟敏感、有序可流式、可压缩。三个通信形态（分离 / 环 / 池）+ 三条加速轴（搬得快 / 少搬 / 重叠）。</p>
+    <div class="figure">
+      <img src="kvcache_comm.svg" alt="KV Cache 通信加速全景图">
+      <p class="figcap">左：载荷特殊性 → 中：三条加速轴 → 右：三个通信形态与各自加速手段</p>
+    </div>
+    <div class="keypoints">
+      <div class="kp-title">要点速记</div>
+      <ul>
+        <li>KV cache 是通信载荷：<b>大</b>（128K 上下文 ≈ 40 GB）、<b>持久</b>、<b>首包延迟敏感</b>、<b>有序可流式</b>、<b>可压缩</b>。</li>
+        <li>三个形态：<b>分离式</b>（p2p / RDMA write）、<b>上下文并行</b>（环上 p2p）、<b>池化</b>（远端 RMA）。</li>
+        <li>三条加速轴：<b>搬得快</b>（零拷贝 / 多 NIC 聚合）、<b>少搬</b>（压缩 / 前缀复用 / 搬 Q 不搬 KV）、<b>重叠</b>（藏进计算）。</li>
+        <li>生产实例：Mooncake TE（40GB KV 到 87/190 GB/s，比 TCP 快 2.4×/4.6×）、Ring Attention / CP、CacheGen（带宽降 3.7~4.3×）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="next">
+    <h3>下一步可以学什么</h3>
+    <ul>
+      <li><b>NCCL 原语全家桶对比</b>：Broadcast / Reduce / AllReduce / AllGather / ReduceScatter / AllToAll —— 各自发多少、收多少、重排不重排。</li>
+      <li><b>Ring AllReduce 算法</b>：看一个集合通信在算法层面如何把通信量优化到接近理论上限。</li>
+      <li><b>FP8 / CUDA Graph</b>：通信体积和 kernel 启动开销如何被进一步压掉。</li>
+      <li><b>生产库对照</b>：NCCL（通用）、DeepEP（MoE 专用）、Triton 手写集合通信 kernel。</li>
+    </ul>
+  </footer>
+
+  <p class="note">本页所有图均由 XCCL/gen_*.py 生成 · 修改 N（卡数）或坐标后可重新生成</p>
+
+</div>
+</body>
+</html>
