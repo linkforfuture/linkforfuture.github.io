@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滑动窗口最大值 · 单调队列图解</title>
+<style>
+  :root{
+    --bg:#f6f7f9;
+    --card:#ffffff;
+    --ink:#1f2430;
+    --ink-2:#5a6272;
+    --ink-3:#8b93a3;
+    --line:#e3e6ec;
+    --blue:#2563eb;
+    --blue-bg:#eaf1ff;
+    --purple:#7c3aed;
+    --purple-bg:#f3ecff;
+    --amber:#d97706;
+    --amber-bg:#fff5e5;
+    --red:#dc2626;
+    --red-bg:#fdecec;
+    --green:#059669;
+    --green-bg:#e7f7f1;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:40px 20px 80px}
+
+  header{text-align:center;margin-bottom:44px}
+  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.4px}
+  .sub{color:var(--ink-2);font-size:15px;margin:0}
+  .meta{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .pill{font-size:12px;padding:3px 10px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--ink-2)}
+  .pill.hard{background:var(--red-bg);border-color:#f7cfcf;color:var(--red)}
+  .pill.ok{background:var(--green-bg);border-color:#c9ecdf;color:var(--green)}
+
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 28px;margin-bottom:22px}
+  h2{font-size:19px;margin:0 0 16px;display:flex;align-items:center;gap:10px}
+  h2 .n{width:26px;height:26px;flex:none;border-radius:8px;background:var(--blue);color:#fff;font-size:13px;display:grid;place-items:center;font-weight:600}
+  h3{font-size:15px;margin:22px 0 8px}
+  p{margin:0 0 12px}
+  .muted{color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.88em;background:#f1f3f7;padding:1.5px 6px;border-radius:5px;color:#334155}
+  b{font-weight:600}
+
+  /* ---- 核心思路卡片 ---- */
+  .idea{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
+  .idea-item{display:flex;gap:12px;padding:14px 16px;border-radius:10px;background:#fafbfd;border:1px solid var(--line)}
+  .idea-item .tag{flex:none;font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;height:fit-content;white-space:nowrap}
+  .tag.red{background:var(--red-bg);color:var(--red)}
+  .tag.blue{background:var(--blue-bg);color:var(--blue)}
+  .tag.amber{background:var(--amber-bg);color:var(--amber)}
+  .tag.green{background:var(--green-bg);color:var(--green)}
+  .idea-item .txt{font-size:14.5px;color:var(--ink-2)}
+  .idea-item .txt b{color:var(--ink)}
+
+  /* ---- 可视化 ---- */
+  .stage{background:#fbfcfe;border:1px solid var(--line);border-radius:12px;padding:22px 20px;margin-bottom:18px}
+
+  .label{font-size:12px;color:var(--ink-3);letter-spacing:.5px;margin-bottom:10px;font-weight:600}
+
+  .arr{display:flex;gap:6px;flex-wrap:wrap}
+  .cell{
+    width:56px;border-radius:9px;border:1.5px solid var(--line);background:#fff;
+    text-align:center;overflow:hidden;transition:.18s ease;position:relative;
+  }
+  .cell .v{font-family:var(--mono);font-size:17px;font-weight:600;padding:7px 0 3px;transition:.18s}
+  .cell .i{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);background:#f7f8fa;padding:2px 0;border-top:1px solid var(--line)}
+  .cell.inwin{background:#fffdf5;border-color:#f0d9a8}
+  .cell.indq{border-color:var(--purple);background:var(--purple-bg);box-shadow:0 0 0 3px rgba(124,58,237,.09)}
+  .cell.indq .v{color:var(--purple)}
+  .cell.front{border-color:var(--purple);background:var(--purple);box-shadow:0 0 0 4px rgba(124,58,237,.16)}
+  .cell.front .v{color:#fff}
+  .cell.front .i{background:rgba(255,255,255,.18);color:rgba(255,255,255,.9);border-top-color:rgba(255,255,255,.25)}
+  .cell.cur{border-color:var(--red);box-shadow:0 0 0 4px rgba(220,38,38,.15)}
+  .cell.cur.indq{box-shadow:0 0 0 4px rgba(220,38,38,.15),0 0 0 7px rgba(124,58,237,.14)}
+  .cell .flag{
+    position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+    font-size:10px;font-weight:700;background:var(--red);color:#fff;padding:1px 6px;border-radius:20px;white-space:nowrap;
+  }
+  .cell .flag.gone{background:var(--ink-3)}
+
+  .dqrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:74px}
+  .dq-arrow{font-size:12px;color:var(--ink-3);white-space:nowrap;font-family:var(--mono)}
+  .dq{display:flex;gap:6px;flex-wrap:wrap;min-height:60px;align-items:center}
+  .dqbox{
+    min-width:52px;border-radius:9px;border:1.5px solid var(--purple);background:var(--purple-bg);
+    text-align:center;overflow:hidden;transition:.18s;
+  }
+  .dqbox .v{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--purple);padding:5px 0 2px}
+  .dqbox .i{font-family:var(--mono);font-size:10.5px;color:#8b6fd0;background:rgba(124,58,237,.09);padding:2px 0}
+  .dqbox .head{font-size:10px;font-weight:700;background:var(--purple);color:#fff;padding:1px 0}
+  .dqempty{font-size:13px;color:var(--ink-3);font-family:var(--mono);padding:14px 0}
+
+  .outrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:40px}
+  .outbox{
+    font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green);
+    background:var(--green-bg);border:1.5px solid #b9e3d3;border-radius:9px;padding:5px 13px;
+    animation:pop .28s ease;
+  }
+  .outbox.fresh{background:var(--green);color:#fff;border-color:var(--green)}
+  @keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+
+  /* ---- 旁白 ---- */
+  .narration{border-radius:12px;padding:16px 18px;border:1px solid var(--line);background:#fff;min-height:104px;transition:.18s}
+  .narration .hd{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .op{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.3px}
+  .op.init{background:#eef1f6;color:var(--ink-2)}
+  .op.popback{background:var(--red-bg);color:var(--red)}
+  .op.pushback{background:var(--blue-bg);color:var(--blue)}
+  .op.popfront{background:var(--amber-bg);color:var(--amber)}
+  .op.record{background:var(--green-bg);color:var(--green)}
+  .op.done{background:#eef1f6;color:var(--ink-2)}
+  .narration .tt{font-weight:600;font-size:15px}
+  .narration .ds{font-size:14.5px;color:var(--ink-2);margin:0}
+  .narration .ds code{background:#f1f3f7}
+
+  /* ---- 控制条 ---- */
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
+  button{
+    font:inherit;font-size:13.5px;padding:7px 15px;border-radius:9px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);cursor:pointer;transition:.15s;font-weight:500;
+  }
+  button:hover:not(:disabled){background:#f4f6fa;border-color:#cfd5e0}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  button.primary:hover:not(:disabled){background:#1d4ed8;border-color:#1d4ed8}
+  .progress{flex:1;min-width:140px;display:flex;align-items:center;gap:10px}
+  input[type=range]{width:100%;accent-color:var(--blue)}
+  .counter{font-family:var(--mono);font-size:12px;color:var(--ink-3);white-space:nowrap}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}
+  .lg{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2)}
+  .sw{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--line);flex:none}
+  .sw.win{background:#fffdf5;border-color:#f0d9a8}
+  .sw.dq{background:var(--purple-bg);border-color:var(--purple)}
+  .sw.fr{background:var(--purple);border-color:var(--purple)}
+  .sw.cu{border-color:var(--red);background:#fff}
+
+  /* ---- 代码 ---- */
+  pre.code{
+    margin:0;background:#1e222c;border-radius:12px;padding:18px 0;overflow-x:auto;
+    font-family:var(--mono);font-size:13px;line-height:1.75;color:#cbd5e1;
+  }
+  pre.code .ln{display:block;padding:0 18px 0 0;border-left:3px solid transparent;transition:.18s}
+  pre.code .ln .num{display:inline-block;width:34px;text-align:right;padding-right:14px;color:#5b6474;user-select:none}
+  pre.code .ln.hl{background:rgba(96,165,250,.14);border-left-color:#60a5fa}
+  pre.code .ln.hl .num{color:#93c5fd}
+  .k{color:#c084fc}.t{color:#7dd3fc}.f{color:#fbbf24}.c{color:#64748b;font-style:italic}.s{color:#86efac}
+
+  /* ---- FAQ ---- */
+  details{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:#fafbfd;overflow:hidden}
+  details[open]{background:#fff}
+  summary{padding:13px 16px;cursor:pointer;font-weight:600;font-size:14.5px;list-style:none;display:flex;align-items:center;gap:9px}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"?";flex:none;width:18px;height:18px;border-radius:50%;background:var(--blue-bg);color:var(--blue);font-size:11px;display:grid;place-items:center;font-weight:700}
+  details p{padding:0 16px 14px 43px;margin:0;font-size:14px;color:var(--ink-2)}
+  details p:first-of-type{padding-top:0}
+
+  /* ---- FAQ 内嵌块 ---- */
+  .dbody{padding:0 16px 16px 43px;font-size:14px;color:var(--ink-2)}
+  .dbody p{padding:0;margin:0 0 10px}
+  .dbody p:last-child{margin-bottom:0}
+  .cmp{margin:12px 0;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .cmp-hd{padding:9px 14px;font-size:13px;background:#f7f8fa;color:var(--ink-2);border-bottom:1px solid var(--line)}
+  .cmp-hd code{background:#eef1f6}
+  .cmp-row{display:flex;gap:12px;padding:10px 14px;font-family:var(--mono);font-size:12.5px;align-items:baseline;flex-wrap:wrap}
+  .cmp-row+.cmp-row{border-top:1px solid var(--line)}
+  .cmp-row.good{background:var(--green-bg)}
+  .cmp-row.bad{background:var(--red-bg)}
+  .cmp-row .mark{flex:none;font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:rgba(0,0,0,.07)}
+  .cmp-row .tick{font-weight:700}
+  .cmp-row.good .tick{color:var(--green)}
+  .cmp-row.bad .tick{color:var(--red)}
+  .tbl-wrap{overflow-x:auto}
+  .tbl{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  .tbl th,.tbl td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .tbl th{font-size:12px;color:var(--ink-3);font-weight:600;background:#fafbfd}
+  .tbl td{color:var(--ink-2)}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl td.no{color:var(--red);font-weight:600}
+  ul.count{margin:10px 0;padding-left:22px}
+  ul.count li{margin-bottom:6px}
+  .ledger{margin:12px 0;display:grid;gap:6px}
+  .ledger-row{display:flex;gap:10px;align-items:center;padding:8px 13px;border-radius:8px;background:#fafbfd;border:1px solid var(--line);font-size:13.5px;flex-wrap:wrap}
+  .ledger-row.total{background:var(--blue-bg);border-color:#cfdeff;color:var(--ink)}
+  .coin{flex:none;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#fbbf24;color:#78350f}
+  .coin.save{background:#60a5fa;color:#0c2d6b}
+
+  /* ---- 举一反三 ---- */
+  h3 .hn{font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-right:7px;font-weight:600}
+  h3{margin-top:30px}
+  h3:first-of-type{margin-top:6px}
+
+  .dom{margin:16px 0;border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .dom-head,.dom-body{display:grid;grid-template-columns:1fr 1fr}
+  .dom-head{background:#fafbfd;border-bottom:1px solid var(--line)}
+  .dom-head div{padding:10px 16px;font-size:13px;font-weight:600}
+  .dom-head div:first-child{border-right:1px solid var(--line);color:var(--ink-2)}
+  .dom-head div:last-child{color:var(--purple)}
+  .dom-body>div{padding:15px 16px}
+  .dom-body>div:first-child{border-right:1px solid var(--line)}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:12.5px}
+  .bar-row:last-child{margin-bottom:0}
+  .bar-row .bl{width:28px;color:var(--ink-3);flex:none;font-family:var(--mono);font-size:11px}
+  .bar{height:20px;border-radius:5px;flex:1;background:#eef1f6;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:5px}
+  .bar i.old{background:#c7d2fe}
+  .bar i.new{background:var(--purple)}
+  .bar-row .bv{width:56px;text-align:right;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);flex:none}
+  .dom-verdict{padding:12px 16px;background:var(--red-bg);color:var(--red);font-size:13.5px;font-weight:600;text-align:center;border-top:1px solid #f7cfcf}
+
+  .frontier{margin:16px 0;padding:18px 20px;border:1px dashed #c4b5fd;border-radius:11px;background:var(--purple-bg)}
+  .fr-line{display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--purple);font-weight:600;white-space:nowrap}
+  .fr-line .arr{flex:1;min-width:40px;height:2px;background:linear-gradient(90deg,var(--purple),#c4b5fd);position:relative;border-radius:2px}
+  .fr-line .arr::before,.fr-line .arr::after{content:"";position:absolute;top:-4px;width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent}
+  .fr-line .arr::before{left:-1px;border-right:7px solid var(--purple)}
+  .fr-line .arr::after{right:-1px;border-left:7px solid #c4b5fd}
+  .fr-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .fr-col{background:#fff;border-radius:9px;padding:12px 14px;font-size:13px;color:var(--ink-2);border:1px solid #e6dcff}
+  .fr-col b{color:var(--purple);display:block;margin-bottom:4px}
+
+  .prin{display:grid;gap:10px;margin-top:14px}
+  .prin-item{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fafbfd}
+  .prin-item .pt{font-weight:600;font-size:14.5px;margin-bottom:7px;display:flex;gap:9px;align-items:center}
+  .prin-item .pt .pn{flex:none;width:20px;height:20px;border-radius:6px;background:var(--blue);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:700}
+  .prin-item .pb{font-size:13.5px;color:var(--ink-2)}
+  .prin-item .ex{margin-top:9px;font-size:12.5px;color:var(--ink-3);border-left:2px solid var(--line);padding-left:11px}
+
+  .chk{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}
+  .chk li{display:flex;gap:11px;align-items:flex-start;font-size:14px;color:var(--ink-2);background:#fafbfd;border:1px solid var(--line);border-radius:9px;padding:11px 14px}
+  .chk li .num{flex:none;width:20px;height:20px;border-radius:50%;background:var(--green-bg);color:var(--green);font-size:11px;display:grid;place-items:center;font-weight:700;font-family:var(--mono)}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 12px}
+  .filters button{font-size:12.5px;padding:5px 14px;border-radius:20px}
+  .filters button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .tbl tr.hide{display:none}
+  .tagc{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;white-space:nowrap}
+  .tagc.q{background:var(--purple-bg);color:var(--purple)}
+  .tagc.s{background:var(--amber-bg);color:var(--amber)}
+  .tagc.d{background:var(--blue-bg);color:var(--blue)}
+  .tagc.p{background:var(--green-bg);color:var(--green)}
+
+  pre.mini{background:#1e222c;color:#cbd5e1;border-radius:11px;padding:15px 16px;font-family:var(--mono);font-size:12px;line-height:1.75;overflow-x:auto;margin:0}
+  pre.mini .cap{display:block;color:#94a3b8;font-size:11px;margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid #334155}
+  pre.mini .c{color:#64748b;font-style:italic}
+  pre.mini b{background:rgba(96,165,250,.2);border-radius:3px;padding:1px 3px;font-weight:600;color:#bfdbfe}
+  .codelay{display:grid;gap:14px;margin-top:14px}
+
+  @media (max-width:640px){
+    .dom-head,.dom-body,.fr-cols{grid-template-columns:1fr}
+    .dom-head div:first-child,.dom-body>div:first-child{border-right:none;border-bottom:1px solid var(--line)}
+    .dbody{padding:0 14px 14px 16px}
+  }
+
+  .kbd{font-family:var(--mono);font-size:12px;background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:var(--ink-2)}
+
+  /* ---- 返回导航 ---- */
+  .backnav{position:fixed;top:14px;left:14px;z-index:9999;display:flex;gap:8px;flex-wrap:wrap}
+  .backnav a{
+    display:inline-flex;align-items:center;gap:6px;padding:8px 16px;
+    background:#fff;border:1px solid #d0d7de;border-radius:999px;
+    color:#4f46e5;text-decoration:none;font-size:13px;font-weight:500;
+    box-shadow:0 2px 10px rgba(0,0,0,.10);transition:.15s;
+  }
+  .backnav a:hover{background:#f4f6fa;border-color:#b9c0c9}
+
+  @media (max-width:900px){ header{margin-top:46px} }
+  @media (max-width:600px){
+    .wrap{padding:24px 12px 60px}
+    section{padding:20px 16px}
+    .cell{width:46px}
+    .cell .v{font-size:15px}
+    h1{font-size:23px}
+    .backnav a{padding:6px 12px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+
+<nav class="backnav">
+  <a href="../../index.html">← 返回主页</a>
+  <a href="../">← LeetCode 专栏</a>
+</nav>
+
+<div class="wrap">
+
+<header>
+  <h1>滑动窗口最大值 · 单调队列图解</h1>
+  <p class="sub">LeetCode 239 &nbsp;·&nbsp; 把 <code>deque</code> 里到底发生了什么，一步步拆开给你看</p>
+  <div class="meta">
+    <span class="pill hard">难度：困难</span>
+    <span class="pill ok">时间 O(n)</span>
+    <span class="pill">空间 O(k)</span>
+    <span class="pill">单调队列</span>
+  </div>
+</header>
+
+<!-- ========== 1. 一句话核心 ========== -->
+<section>
+  <h2><span class="n">1</span>先记住一句话</h2>
+  <p>这个 <code>deque</code> <b>不是窗口</b>。它是一份「<b>还没被淘汰的候选人名单</b>」，里面存的是<b>下标</b>，对应的值从头到尾<b>严格递减</b>。</p>
+  <p class="muted">队首 = 当前窗口的最大值。仅此而已。</p>
+  <p class="muted" style="background:var(--amber-bg);border:1px solid #f3e0bd;border-radius:9px;padding:11px 14px;font-size:13.5px">
+    ⚠️ 最容易踩的前提误解：<b><code>deque</code> 自己不会排序</b>。这个「递减」是步骤①那个 <code>while</code> 循环<b>手动维护</b>出来的，容器完全不知道里面的值是有序的。详见第 4 节第一条。
+  </p>
+
+  <div class="idea" style="margin-top:18px">
+    <div class="idea-item">
+      <span class="tag red">步骤①</span>
+      <span class="txt"><b>队尾淘汰：</b><code>nums[dq.back()] &lt;= nums[i]</code> 就弹掉。<br>
+      理由：来了个又新又大的。那些又旧又小的，等 <code>nums[i]</code> 都过期了它们更早过期，永远轮不到它们当最大值 —— <b>它们已经死了，只是尸体还留在队列里</b>。</span>
+    </div>
+    <div class="idea-item">
+      <span class="tag blue">步骤②</span>
+      <span class="txt"><b>自己入队：</b><code>dq.push_back(i)</code>。<br>
+      注意存的是 <b>下标 i</b> 而不是值 —— 因为后面要判断「过期」，必须知道它在哪个位置。</span>
+    </div>
+    <div class="idea-item">
+      <span class="tag amber">步骤③</span>
+      <span class="txt"><b>队首过期：</b><code>dq.front() &lt;= i - k</code> 就弹掉。<br>
+      窗口是 <code>[i-k+1, i]</code>，队首下标 ≤ <code>i-k</code> 说明它已经滑出左边界了。因为它最大，一直赖在队首，所以只需要检查它一个。</span>
+    </div>
+    <div class="idea-item">
+      <span class="tag green">步骤④</span>
+      <span class="txt"><b>记录答案：</b>窗口形成后（<code>i &gt;= k-1</code>），<code>nums[dq.front()]</code> 就是答案。<br>
+      为什么队首最大？因为整个队列是递减的，左边那个就是老大。</span>
+    </div>
+  </div>
+
+  <h3>为什么是 O(n) 而不是 O(nk)？</h3>
+  <p class="muted">每个下标 <b>最多入队 1 次</b>，也<b>最多出队 1 次</b>（无论从队首还是队尾出去）。所以整个循环里 <code>pop</code> 的总次数 ≤ <code>n</code>。虽然有个 <code>while</code> 套在 <code>for</code> 里，但它是<b>均摊 O(1)</b> 的 —— 不是每个 <code>i</code> 都会弹很多次，前面弹得多，后面就没得弹了。</p>
+</section>
+
+<!-- ========== 2. 动画演示 ========== -->
+<section>
+  <h2><span class="n">2</span>逐步演示</h2>
+  <p class="muted" style="font-size:14px">示例：<code>nums = [7, 2, 4, 6, 3, 5, 1, 8]</code>，<code>k = 3</code>。点「下一步」或者直接播放。</p>
+  <p class="muted" style="font-size:13px;color:var(--ink-3)">（特意选了这个数组：LeetCode 上那个经典例子 <code>[1,3,-1,-3,5,3,6,7]</code> 其实一次都不会触发步骤③，因为最大值总在过期前就被更大值顶掉了，那样你就看不到「队首滑出」到底长什么样。）</p>
+
+  <div class="stage">
+    <div class="label">数组 nums（黄底 = 当前窗口范围 · 紫框 = 在队列里 · 深紫 = 队首）</div>
+    <div class="arr" id="arr"></div>
+
+    <div class="label" style="margin-top:22px">单调队列 deque（存的是下标）</div>
+    <div class="dqrow">
+      <span class="dq-arrow">队首<br>pop_front ↓</span>
+      <div class="dq" id="dq"></div>
+    </div>
+
+    <div class="label" style="margin-top:18px">输出 result</div>
+    <div class="outrow" id="out"></div>
+  </div>
+
+  <div class="narration" id="narr">
+    <div class="hd"><span class="op init" id="op">准备</span><span class="tt" id="tt"></span></div>
+    <p class="ds" id="ds"></p>
+  </div>
+
+  <div class="controls">
+    <button id="btnReset">↺ 重置</button>
+    <button id="btnPrev">← 上一步</button>
+    <button class="primary" id="btnNext">下一步 →</button>
+    <button id="btnPlay">▶ 自动播放</button>
+    <div class="progress">
+      <input type="range" id="slider" min="0" max="0" value="0">
+    </div>
+    <span class="counter" id="counter"></span>
+  </div>
+
+  <div class="legend">
+    <span class="lg"><span class="sw win"></span>在窗口内</span>
+    <span class="lg"><span class="sw dq"></span>在队列中</span>
+    <span class="lg"><span class="sw fr"></span>队首（最大值）</span>
+    <span class="lg"><span class="sw cu"></span>当前处理的 i</span>
+  </div>
+</section>
+
+<!-- ========== 3. 对照代码 ========== -->
+<section>
+  <h2><span class="n">3</span>对照代码</h2>
+  <p class="muted" style="font-size:14px;margin-bottom:16px">高亮的那几行，就是当前这一步在做的事。</p>
+  <pre class="code" id="code"></pre>
+</section>
+
+<!-- ========== 4. 常见疑问 ========== -->
+<section>
+  <h2><span class="n">4</span>几个卡住人的点</h2>
+
+  <details open>
+    <summary>deque 里面是按什么规则排序的？</summary>
+    <div class="dbody">
+      <p><b>不排序。</b><code>std::deque</code> 就是一个「两头都能 O(1) 进出的数组」，<code>push_back</code> 把元素扔到末尾，它不做任何比较，也不知道里面的值是有序的。</p>
+      <p>那个「递减」是<b>算法的 while 循环手动维护出来的</b>，不是容器的功能。如果只执行 <code>dq.push_back(i)</code> 这一行，往空队列里依次塞 7、2、5，你会得到 <code>[7,2,5]</code> —— 乱序。</p>
+      <div class="cmp">
+        <div class="cmp-hd">队列当前是 <code>[7, 2]</code>，现在要插入 5：</div>
+        <div class="cmp-row good"><span class="mark">有 while</span>nums[2]=2 &le; 5 → 弹掉 2 → push 5 → <b>[7, 5]</b> <span class="tick">✓ 仍递减</span></div>
+        <div class="cmp-row bad"><span class="mark">没 while</span>直接 push 5 → <b>[7, 2, 5]</b> <span class="tick">✗ 递减被破坏</span></div>
+      </div>
+      <p>所以「单调队列」这个名字，指的是 <b>deque + 一套始终维持单调性的纪律</b>。deque 只是被选中的容器，单调性是你自己写代码保证的。就像一个手写的「当前前三名」榜单 —— 榜单本身不会自动排序，是你每次录入新成绩时顺手把该划掉的划掉。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>那为什么不用 set 或 priority_queue？</summary>
+    <div class="dbody">
+      <table class="tbl">
+        <tr><th>容器</th><th>插入</th><th>取最大</th><th>删除任意元素</th></tr>
+        <tr><td><code>deque</code></td><td>O(1)</td><td>队首直接取</td><td>能，但要自己找位置</td></tr>
+        <tr><td><code>set</code>（红黑树）</td><td>O(log n)</td><td>O(1)，<code>*rbegin()</code></td><td>能，O(log n)</td></tr>
+        <tr><td><code>priority_queue</code>（堆）</td><td>O(log n)</td><td>O(1)</td><td class="no">不能，只能懒删除</td></tr>
+      </table>
+      <p><code>set</code> 也能做出正确答案，总复杂度 O(n log n)。单调队列能做到 O(n)，是因为它<b>额外利用了「过期顺序是 FIFO」这个结构信息</b> —— 越早入队的越早过期，所以从队首删就够了。堆没有这个顺序，所以堆的解法必然慢一档。</p>
+      <p>另外 <code>vector</code> 不能用：它的 <code>pop_front()</code> 要把后面所有元素整体前移，是 O(k)，总复杂度会退化成 O(nk)。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>为什么弹出条件是 <code>&lt;=</code> 而不是 <code>&lt;</code>？</summary>
+    <p>用 <code>&lt;=</code> 是<b>为了把相等的旧元素也弹掉</b>，让队列里同一个值只保留最新的那个。</p>
+    <p>两种写法结果都对（相等时留谁都不影响最大值）。但保留最新的下标更「耐用」—— 它更晚过期，能多撑一会儿。所以是习惯上的最优写法，不是正确性要求。</p>
+  </details>
+
+  <details>
+    <summary>为什么队列里存下标，不直接存值？</summary>
+    <p>因为步骤③需要判断<b>过期</b>：得知道这个元素当初在数组的哪个位置，才能算出它有没有滑出左边界。</p>
+    <p>只存值的话，一旦队首和某个新来者数值相同，你就分不清队首到底是哪个位置的了。<b>下标是身份证，值只是属性。</b></p>
+  </details>
+
+  <details>
+    <summary>步骤①和步骤③的顺序能换吗？</summary>
+    <p>能，但要注意一个边界：如果 <code>k = 1</code>，先处理别的容易出岔子。目前这个顺序（先弹队尾 → 再入队 → 再弹队首）是最稳的，因为<b>入队之后队列一定非空</b>，步骤③访问 <code>dq.front()</code> 时不需要额外的空判断。</p>
+    <p>官方的另一种常见写法是先弹队首再弹队尾，也可以，但必须写成 <code>while</code> 而不是 <code>if</code>（虽然实际最多只弹一个，写 <code>if</code> 也行）。</p>
+  </details>
+
+  <details>
+    <summary>为什么步骤③只用 <code>if</code> 不用 <code>while</code>？</summary>
+    <p>因为下标是<b>递增入队</b>的（<code>0,1,2,...</code> 依次 push），队列内部下标一定是从小到大排列。所以队首是<b>最旧</b>的那个——它要是没过期，第二个更不可能过期。最多弹一个。</p>
+    <p>反过来说，如果队首过期了，弹掉之后新的队首是下一个较新的下标，它一定在窗口内，不用再循环判断。</p>
+  </details>
+
+  <details open>
+    <summary>while 里那一堆 pop_back，开销为什么不算进复杂度？</summary>
+    <div class="dbody">
+      <p><b>算进去了，而且算出来的总量小得惊人。</b>关键就一句话：<b>元素一旦被 <code>pop_back()</code> 弹掉，就永远不会再被访问。</b></p>
+      <p>于是可以数总量：</p>
+      <ul class="count">
+        <li>每个下标<b>入队恰好 1 次</b> → 总共 <code>n</code> 次 <code>push_back</code></li>
+        <li>每个下标<b>出队至多 1 次</b>（从队首弹、从队尾弹、或留到最后）→ 总共 ≤ <code>n</code> 次 <code>pop</code></li>
+        <li><code>while</code> 条件判断：失败退出每次迭代 1 次（≤ n），成功进循环每次对应一次 pop（≤ n）</li>
+      </ul>
+      <p>三者相加 <b>≤ 3n</b>。也就是说，那个嵌套 <code>while</code> 的循环体，在<b>整个算法的一生中</b>最多执行 n 次 —— 不是每次迭代 n 次。</p>
+      <div class="ledger">
+        <div class="ledger-row"><span class="coin">+2</span><code>push_back</code> 的时候，往这个元素身上贴 2 块钱</div>
+        <div class="ledger-row"><span class="coin">−1</span>1 块当场付掉「入队」这个动作本身</div>
+        <div class="ledger-row"><span class="coin save">存</span>另 1 块<b>存在元素身上</b>，等它将来被弹出时用来付账</div>
+        <div class="ledger-row"><span class="coin">−1</span>被弹出时，用它自己身上那 1 块钱付清，不欠债</div>
+        <div class="ledger-row total">总收入 2n，总支出 ≤ 2n → <b>O(n)</b></div>
+      </div>
+      <p>每个元素最多被弹一次，所以每笔弹出的账都由它自己预付的钱付清，不需要额外借钱。均摊到 n 次迭代，每次 <b>O(1)</b>。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>单次迭代真的可能很贵吗？</summary>
+    <div class="dbody">
+      <p>会。要分清「<b>均摊</b> O(1)」和「<b>每次都是</b> O(1)」：</p>
+      <div class="cmp">
+        <div class="cmp-hd">构造一个最坏情况</div>
+        <div class="cmp-row">nums = [5, 4, 3, 2, 1, 100]，k = 3</div>
+      </div>
+      <p>前 5 次循环，队列一路长成 <code>[5,4,3,2,1]</code>，一个都没弹。然后 <code>i=5</code> 遇上 100，<b>一次性把 5 个全弹光</b>，那一步确实是 O(n)。</p>
+      <p>但这 5 次弹出的钱不是凭空来的 —— 是前面 5 次入队时预付的。整体算总账不变。这正是摊还分析的意义：<b>允许个别步骤很贵，只要贵的理由在之前已经预付过。</b></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>队列里是不是一直装着整整 k 个元素？</summary>
+    <p>不是，而且通常比 k 少得多。步骤①会大量淘汰，队列里只留「<b>从右往左看，一个比一个大的那些</b>」—— 也就是所谓的「<b>后缀最大值</b>」序列。</p>
+    <p>极端情况下（数组完全递减，比如 <code>[9,8,7,6,5]</code>, k=3），没有任何元素被步骤①弹掉，队列里就是整整 k 个。反过来数组递增时，队列永远只装 1 个。</p>
+  </details>
+
+  <details>
+    <summary>「窗口滑动」到底体现在哪一步？</summary>
+    <p>窗口滑动的<b>唯一动作</b>就是步骤③ —— 把左边界以外的旧元素踢出去。右边界是靠 <code>for</code> 循环的 <code>i</code> 前进实现的。</p>
+    <p>而窗口「还没形成」的阶段（<code>i &lt; k-1</code>），只进不出，所以循环里有个 <code>if (i &gt;= k-1)</code> 才记录答案。</p>
+  </details>
+</section>
+
+<!-- ========== 5. 思想内核 ========== -->
+<section>
+  <h2><span class="n" style="background:var(--purple)">5</span>思想内核：二维支配与 Pareto 前沿</h2>
+  <p>这道题表面教的是「单调队列」，但把这个数据结构忘掉，剩下的是一个更普适的东西。</p>
+
+  <h3><span class="hn">5.1</span>每个元素其实有两个属性</h3>
+  <p class="muted" style="font-size:14.5px">把每个元素看成一个带两个属性的点，而这两个属性都是<b>越大越好</b>：</p>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <tr><th>属性</th><th>符号</th><th>含义</th><th>方向</th></tr>
+    <tr><td><b>值</b></td><td><code>nums[j]</code></td><td>有没有资格当最大值</td><td>越大越好</td></tr>
+    <tr><td><b>寿命</b></td><td><code>j</code>（下标）</td><td>什么时候过期出局</td><td>越晚越好</td></tr>
+  </table>
+  </div>
+  <p>对两个下标 <code>j &lt; i</code>，如果 <code>nums[j] &le; nums[i]</code>，那么：<b>值维度上 <code>i</code> 不输</b>，<b>时间维度上 <code>i</code> 活得更久</b>。</p>
+  <p><code>j</code> 在两个维度上<b>全面劣于</b> <code>i</code> —— 这叫 <code>i</code> <b>支配（dominate）</b> <code>j</code>。被支配的元素是<b>永久无用</b>的：只要 <code>i</code> 还活着，最大值轮不到 <code>j</code>；等 <code>i</code> 死了，<code>j</code> 早就死透了。可以从状态里<b>永久删除</b>。</p>
+
+  <div class="dom">
+    <div class="dom-head">
+      <div>旧元素 &nbsp;j = 下标 4，值 3</div>
+      <div>新来的 &nbsp;i = 下标 5，值 5</div>
+    </div>
+    <div class="dom-body">
+      <div>
+        <div class="bar-row"><span class="bl">值</span><span class="bar"><i class="old" style="width:37.5%"></i></span><span class="bv">3</span></div>
+        <div class="bar-row"><span class="bl">寿命</span><span class="bar"><i class="old" style="width:57%"></i></span><span class="bv">到 i=4</span></div>
+      </div>
+      <div>
+        <div class="bar-row"><span class="bl">值</span><span class="bar"><i class="new" style="width:62.5%"></i></span><span class="bv">5 ✓</span></div>
+        <div class="bar-row"><span class="bl">寿命</span><span class="bar"><i class="new" style="width:71%"></i></span><span class="bv">到 i=5 ✓</span></div>
+      </div>
+    </div>
+    <div class="dom-verdict">两根柱子都更长 → j 被全面压制 → 永久删除</div>
+  </div>
+  <p class="muted" style="font-size:13px;color:var(--ink-3)">（这组数字就是第 2 节动画里 <code>i=5</code> 那一步真实发生的事。）</p>
+
+  <h3><span class="hn">5.2</span>于是：队列里存的是 Pareto 前沿</h3>
+  <p>把所有被支配的元素删掉之后，剩下的就是那些<b>互相不可比</b>的元素 —— 谁也不能全面压制谁。这正是二维偏序下的 <b>Pareto 最优集</b>：值大的活不长，活得久的值不大，两个目标互相拉扯，一个都不能删。</p>
+
+  <div class="frontier">
+    <div class="fr-line"><span>队首</span><span class="arr"></span><span>队尾</span></div>
+    <div class="fr-cols">
+      <div class="fr-col"><b>队首 = 值维度最优</b>值最大，最可能赢；但最旧，最快过期</div>
+      <div class="fr-col"><b>队尾 = 时间维度最优</b>最新，活得最久；但值最小，最不可能赢</div>
+    </div>
+    <p style="margin:14px 0 0;font-size:13px;color:var(--purple);text-align:center">整个队列就是从「值优先」到「时间优先」的权衡前沿</p>
+  </div>
+
+  <p>这个视角一下子解释了三件看起来奇怪的事：</p>
+  <ul class="count" style="font-size:14px;color:var(--ink-2)">
+    <li>为什么队首就是最大值？→ 队首是<b>值维度</b>的最优点</li>
+    <li>为什么队列一定递减？→ 从队首到队尾，就是在<b>用值换寿命</b></li>
+    <li>为什么只弹队尾、不弹中间？→ 新元素在时间维度上必然最优，它只能支配那些<b>值也不如它</b>的元素，而那些恰好都堆在队尾</li>
+  </ul>
+
+  <h3><span class="hn">5.3</span>三个可迁移的通用原理</h3>
+  <div class="prin">
+    <div class="prin-item">
+      <div class="pt"><span class="pn">1</span>主动维护不变量，用维护成本换查询成本</div>
+      <div class="pb"><code>deque</code> 本身什么都不会，是代码<b>每时每刻维持着「递减」这个不变量</b>，才把「取最大值」退化成了「看队首」这一个 O(1) 动作。而且它只需要<b>部分有序</b>（递减即可）而非全序，所以维护成本比堆的 O(log n) 还低。
+        <div class="ex">同族：堆（维护堆序换 O(1) 取极值）、并查集（维护扁平化换近 O(1) 查询）、前缀和（维护累加换 O(1) 区间和）</div>
+      </div>
+    </div>
+    <div class="prin-item">
+      <div class="pt"><span class="pn">2</span>摊还分析：让每个元素一生只被处理常数次</div>
+      <div class="pb">每个元素入队一次、出队一次 → 总代价有上界 → 个别步骤再贵也不怕。识别特征是「<b>单调前进的指针</b>」或「<b>一生只删一次的元素</b>」。
+        <div class="ex">同族：KMP 的 <code>j = next[j]</code> 回退（每次最多 +1，回退总量 ≤ 前进总量）、并查集路径压缩、<code>vector::push_back</code> 扩容、Manacher 回中心扩展</div>
+      </div>
+    </div>
+    <div class="prin-item">
+      <div class="pt"><span class="pn">3</span>识别问题特有结构，把通用工具从 O(n log n) 打到 O(n)</div>
+      <div class="pb"><code>set</code> / 堆都能做出正确答案，代价 O(n log n)。但注意到「<b>过期顺序 = 入队顺序</b>」这个额外结构后，就能 O(n)。<b>通用数据结构给你 O(log n)；识别出问题特有的结构，往往能拿到 O(1)</b> —— 代价是解法不再通用、更难维护，这是一次有意识的权衡。
+        <div class="ex">反面：如果淘汰顺序不是 FIFO（比如按优先级淘汰），这个结构就不存在了，只能老老实实用堆</div>
+      </div>
+    </div>
+  </div>
+
+  <h3><span class="hn">5.4</span>判别法：什么时候该想到它</h3>
+  <p class="muted" style="font-size:14.5px">四个条件同时成立就该警觉：</p>
+  <ul class="chk">
+    <li><span class="num">1</span>有<b>滑动窗口</b>，或任何固定长度的连续区间</li>
+    <li><span class="num">2</span>求区间内的 <b>max / min</b>（求 sum 请用前缀和，不是它）</li>
+    <li><span class="num">3</span>窗口<b>单向移动</b>，从前往后不回退</li>
+    <li><span class="num">4</span>需要 <b>O(n)</b>，不接受 O(n log n)</li>
+  </ul>
+  <p>但真正的本质判据只有一句：<b>存在支配关系，且被支配者能被永久删除。</b></p>
+
+  <h3><span class="hn">5.5</span>变形矩阵：改一个维度，得到另一个算法</h3>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <tr><th>改动</th><th>得到什么</th></tr>
+    <tr><td>比较方向 <code>&le;</code> 改成 <code>&ge;</code></td><td>滑动窗口<b>最小值</b></td></tr>
+    <tr><td>去掉<b>时间维</b>淘汰（步骤③）</td><td><b>单调栈</b> —— 解决「下一个更大元素」</td></tr>
+    <tr><td>去掉<b>值维</b>淘汰（步骤①）</td><td>普通队列 —— 滑动平均 / 定长区间和</td></tr>
+    <tr><td>窗口大小不再固定</td><td><b>双指针 + 单调队列</b>（如 LC 1438）</td></tr>
+    <tr><td>同时挂两个队列（一增一减）</td><td>同时维护区间的 max 和 min</td></tr>
+    <tr><td>存的不是 <code>nums[j]</code> 而是 <code>dp[j] + w(j)</code></td><td><b>单调队列优化 DP</b>（见 6.1，回报最高的一条）</td></tr>
+  </table>
+  </div>
+
+  <p style="background:var(--purple-bg);border:1px solid #e6dcff;border-radius:10px;padding:14px 17px;font-size:14.5px;color:var(--ink);margin-top:20px">
+    <b>一句话总结这个思想：</b>当新来的元素在两个维度上都压制了旧的元素，旧元素可以永久删除。于是候选集始终只剩「互相不可比」的那一小撮，答案必在其中某个固定位置（队首），而淘汰的总代价被摊还成 O(1)。
+  </p>
+</section>
+
+<!-- ========== 6. 迁移地图 ========== -->
+<section>
+  <h2><span class="n" style="background:var(--purple)">6</span>举一反三：迁移地图</h2>
+
+  <h3><span class="hn">6.1</span>回报最高的迁移：单调队列优化 DP</h3>
+  <p>一大类 DP 的形状是长这样的：</p>
+  <pre class="mini" style="margin:14px 0"><span class="cap">通用形状</span>dp[i] = <b>max{ dp[j] + w(j) }</b>   ,  <b>j &isin; [i-k, i-1]</b></pre>
+  <p>把滑动窗口里装的 <code>nums[j]</code> <b>整个换成 <code>dp[j] + w(j)</code></b>，<code>k</code> 就是转移的跨度限制。代码结构一字不改，转移从 O(k) 降到 O(1)，整体从 <b>O(nk) 降到 O(n)</b>。</p>
+
+  <p class="muted" style="font-size:14px;margin-top:18px">以 <b>LC 1696 跳跃游戏 VI</b>（<code>dp[i] = nums[i] + max(dp[j])</code>）为例，和本题并排看：</p>
+
+  <div class="codelay">
+    <pre class="mini"><span class="cap">本题 LC 239 —— 窗口里放 nums[j]</span>for (int i = 0; i &lt; n; ++i) {
+    while (!dq.empty() &amp;&amp; <b>nums[dq.back()] &lt;= nums[i]</b>) dq.pop_back();
+    dq.push_back(i);
+    if (dq.front() &lt;= i - k) dq.pop_front();          <span class="c">// 窗口 [i-k+1, i]</span>
+    if (i &gt;= k - 1) result.push_back(<b>nums[dq.front()]</b>);
+}</pre>
+
+    <pre class="mini"><span class="cap">LC 1696 —— 窗口里放 dp[j]</span>vector&lt;int&gt; dp(n);
+deque&lt;int&gt; dq;                                       <span class="c">// 存下标 j，dp[j] 递减</span>
+dp[0] = nums[0];
+dq.push_back(0);
+for (int i = 1; i &lt; n; ++i) {
+    while (dq.front() &lt; i - k) dq.pop_front();       <span class="c">// 窗口 [i-k, i-1]</span>
+    dp[i] = <b>dp[dq.front()] + nums[i]</b>;             <span class="c">// 转移 O(1)</span>
+    while (!dq.empty() &amp;&amp; <b>dp[dq.back()] &lt;= dp[i]</b>) dq.pop_back();
+    dq.push_back(i);
+}
+return dp[n - 1];</pre>
+  </div>
+
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <tr><th></th><th>本题 LC 239</th><th>DP 优化（如 LC 1696）</th></tr>
+    <tr><td>窗口</td><td><code>[i-k+1, i]</code>，含 <code>i</code> 自己</td><td><code>[i-k, i-1]</code>，不含 <code>i</code></td></tr>
+    <tr><td>队列里装的抽象量</td><td><code>nums[j]</code></td><td><code>dp[j]</code></td></tr>
+    <tr><td>入队前的比较</td><td><code>nums[dq.back()] &le; nums[i]</code></td><td><code>dp[dq.back()] &le; dp[i]</code></td></tr>
+    <tr><td>取答案</td><td><code>result.push_back(nums[dq.front()])</code></td><td><code>dp[i] = dp[dq.front()] + nums[i]</code></td></tr>
+  </table>
+  </div>
+  <p class="muted" style="font-size:13px">窗口差一个位置，是因为本题的窗口<b>包含当前元素</b>，而 DP 的转移来源只能是<b>之前</b>的位置。</p>
+
+  <h3><span class="hn">6.2</span>题目地图</h3>
+  <p class="muted" style="font-size:14px">点下面的标签筛选。标 <span class="tagc p">前缀和</span> 的那道特别值得看 —— 它说明被支配的对象<b>不一定是原数组元素</b>，可以是任何扫描过程中累积出来的量。</p>
+
+  <div class="filters" id="filters">
+    <button class="on" data-f="all">全部</button>
+    <button data-f="q">单调队列</button>
+    <button data-f="s">单调栈</button>
+    <button data-f="d">DP 优化</button>
+    <button data-f="p">前缀和</button>
+  </div>
+
+  <div class="tbl-wrap">
+  <table class="tbl" id="probTable">
+    <tr><th>题目</th><th>核心思路</th><th>类别</th></tr>
+    <tr data-cat="q"><td><b>LC 239</b> 滑动窗口最大值</td><td>本题。值维 + 时间维双重淘汰</td><td><span class="tagc q">单调队列</span></td></tr>
+    <tr data-cat="q"><td><b>剑指 Offer 59-II</b> 队列的最大值</td><td>本题的「数据结构版」，要求 push / pop / max 全部 O(1)</td><td><span class="tagc q">单调队列</span></td></tr>
+    <tr data-cat="q"><td><b>LC 1438</b> 绝对差不超过限制的最长连续子数组</td><td>挂两个队列（一增一减）同时维护 max 和 min，配双指针</td><td><span class="tagc q">单调队列</span></td></tr>
+    <tr data-cat="p"><td><b>LC 862</b> 和至少为 K 的最短子数组</td><td>队列里装的是<b>前缀和</b>，下标之差就是区间长度</td><td><span class="tagc p">前缀和</span></td></tr>
+    <tr data-cat="d"><td><b>LC 1696</b> 跳跃游戏 VI</td><td><code>dp[i] = nums[i] + max(dp[j])</code>，模板题</td><td><span class="tagc d">DP 优化</span></td></tr>
+    <tr data-cat="d"><td><b>LC 1425</b> 带限制的子序列和</td><td>同款形状，注意窗口是 <code>[i-k, i-1]</code></td><td><span class="tagc d">DP 优化</span></td></tr>
+    <tr data-cat="d"><td><b>LC 1499</b> 满足不等式的最大值</td><td>式子变形后套模板，队列里放变形后的量</td><td><span class="tagc d">DP 优化</span></td></tr>
+    <tr data-cat="d"><td><b>LC 1687</b> 从仓库到码头运输箱子</td><td>骨架相同但维度更多，难度陡增</td><td><span class="tagc d">DP 优化</span></td></tr>
+    <tr data-cat="d"><td>多重背包（单调队列优化）</td><td>把 O(V·&Sigma;n) 打到 O(V·N)，竞赛经典操作</td><td><span class="tagc d">DP 优化</span></td></tr>
+    <tr data-cat="s"><td><b>LC 496 / 503</b> 下一个更大元素 I / II</td><td>去掉时间维的版本，只需要值维淘汰</td><td><span class="tagc s">单调栈</span></td></tr>
+    <tr data-cat="s"><td><b>LC 739</b> 每日温度</td><td>下一个更大元素的距离版</td><td><span class="tagc s">单调栈</span></td></tr>
+    <tr data-cat="s"><td><b>LC 84</b> 柱状图中最大的矩形</td><td>左右各找第一个更矮的柱子</td><td><span class="tagc s">单调栈</span></td></tr>
+    <tr data-cat="s"><td><b>LC 42</b> 接雨水</td><td>两侧的支配关系决定每个位置能接多少</td><td><span class="tagc s">单调栈</span></td></tr>
+    <tr data-cat="s"><td><b>LC 907</b> 子数组的最小值之和</td><td>统计每个元素作为最小值能覆盖的区间</td><td><span class="tagc s">单调栈</span></td></tr>
+    <tr data-cat="s"><td><b>LC 316</b> 去除重复字母</td><td>贪心 + 单调栈，贪心正确性靠栈的单调性保证</td><td><span class="tagc s">单调栈</span></td></tr>
+  </table>
+  </div>
+
+  <h3><span class="hn">6.3</span>更远的地方：支配关系到处都在</h3>
+  <p>「删除被支配的候选者」这个想法，换了外衣反复出现：</p>
+  <div class="prin">
+    <div class="prin-item">
+      <div class="pt"><span class="pn" style="background:var(--purple)">凸</span>凸包（Andrew's monotone chain）</div>
+      <div class="pb">三个点里中间那个如果被两端「压住」（不在凸包上），就永久删除。保留的还是 Pareto 前沿 —— 只不过两个维度换成了「x 坐标」和「斜率」，而维护手法仍然是<b>单调栈</b>。
+      </div>
+    </div>
+    <div class="prin-item">
+      <div class="pt"><span class="pn" style="background:var(--purple)">斜</span>斜率优化 DP</div>
+      <div class="pb">决策点 <code>(x_j, y_j)</code> 里，被支配的决策点永远不会最优，于是用单调队列 / 单调栈维护一个下凸壳，转移取切线即可 O(1)。<b>和本题是同一个思想的二维几何版本。</b>
+      </div>
+    </div>
+    <div class="prin-item">
+      <div class="pt"><span class="pn" style="background:var(--purple)">单</span>决策单调性 / Knuth 优化</div>
+      <div class="pb">最优决策点随 <code>i</code> 单调不减 → 一大批候选被「结构性支配」，可以整体跳过。这是支配关系在<b>决策空间</b>里的投影。
+      </div>
+    </div>
+  </div>
+
+  <h3><span class="hn">6.4</span>反过来：什么时候<b>不</b>该用它</h3>
+  <p class="muted" style="font-size:14.5px">强上单调队列只会把代码写复杂，还丢掉了 O(n log n) 解法的可读性。</p>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <tr><th>需求</th><th>该用什么</th></tr>
+    <tr><td>区间求和 / 求积</td><td>前缀和，别绕远</td></tr>
+    <tr><td>窗口两端都会回退（如 LC 76 最小覆盖子串）</td><td>双指针 + 计数；元素剪不掉，没有支配关系</td></tr>
+    <tr><td>需要随机访问窗口内任意元素（如区间第 k 大）</td><td>有序容器 / 可持久化结构</td></tr>
+    <tr><td>淘汰顺序不是 FIFO（按优先级淘汰）</td><td>堆。结构前提不成立，O(n) 拿不到</td></tr>
+  </table>
+  </div>
+</section>
+
+<!-- ========== 7. 记忆口诀 ========== -->
+<section style="background:linear-gradient(135deg,#f0f5ff,#faf8ff);border-color:#dfe4f5">
+  <h2><span class="n" style="background:var(--purple)">7</span>一句话背下来</h2>
+  <p style="font-size:16px;margin:6px 0 0">
+    <b>又旧又小的，弹掉；</b><br>
+    <b>自己进去排队；</b><br>
+    <b>过期的队首，扔掉；</b><br>
+    <b>队首就是答案。</b>
+  </p>
+  <p class="muted" style="margin-top:14px;font-size:14px">四步对应代码里的四段：while 弹尾 → push_back → if 弹首 → push 结果。</p>
+</section>
+
+<p class="muted" style="text-align:center;font-size:13px;margin-top:34px">
+  提示：用 <span class="kbd">←</span> <span class="kbd">→</span> 方向键可以切换步骤
+</p>
+
+</div>
+
+<script>
+/* ================= 数据 ================= */
+const NUMS = [7, 2, 4, 6, 3, 5, 1, 8];
+const K = 3;
+
+/* ================= 生成轨迹 ================= */
+function buildTrace(nums, k) {
+  const steps = [];
+  const dq = [];
+  const out = [];
+
+  const snap = (o) => steps.push(Object.assign({
+    i: null, dq: dq.slice(), out: out.slice(),
+    phase: 'init', title: '', desc: '', lines: [], fresh: -1
+  }, o));
+
+  snap({
+    phase: 'init', lines: [2, 3],
+    title: '初始状态：队列空，结果空',
+    desc: '接下来每次处理一个 <code>nums[i]</code>，都走同样四步：淘汰队尾 → 自己入队 → 淘汰过期队首 → 记录答案。'
+  });
+
+  for (let i = 0; i < nums.length; i++) {
+    const winStart = Math.max(0, i - k + 1);
+    const base = { i, winStart };
+
+    // ---- 步骤① 队尾淘汰 ----
+    const killed = [];
+    while (dq.length && nums[dq[dq.length - 1]] <= nums[i]) {
+      const j = dq.pop();
+      killed.push(j);
+      snap(Object.assign({}, base, {
+        phase: 'popback', lines: [5, 6], killed: killed.slice(),
+        title: `弹出队尾下标 ${j}（值 ${nums[j]}）`,
+        desc: `因为 <code>nums[${j}] = ${nums[j]} &le; nums[${i}] = ${nums[i]}</code>：下标 ${j} 比 ${i} 旧，值还更小，`
+            + `等 ${i} 都滑出窗口了，${j} 早就不在了。它永远没机会成为最大值，直接扔。`
+      }));
+    }
+
+    // ---- 步骤② 入队 ----
+    dq.push(i);
+    snap(Object.assign({}, base, {
+      phase: 'pushback', lines: [8],
+      title: `下标 ${i}（值 ${nums[i]}）从队尾入队`,
+      desc: (killed.length
+              ? `刚才清掉了 ${killed.length} 个没前途的（下标 ${killed.join('、')}）。`
+              : `队尾值 ${nums[dq[dq.length - 2]]} 比 ${nums[i]} 大，所以没淘汰任何人。`)
+            + `现在队列是 <code>[${dq.join(', ')}]</code>，对应值 <code>[${dq.map(x => nums[x]).join(', ')}]</code>，从队首到队尾<b>递减</b>。`
+    }));
+
+    // ---- 步骤③ 队首过期 ----
+    if (dq[0] <= i - k) {
+      const j = dq.shift();
+      snap(Object.assign({}, base, {
+        phase: 'popfront', lines: [9, 10],
+        title: `队首下标 ${j} 滑出窗口，弹出`,
+        desc: `窗口是 <code>[${winStart}, ${i}]</code>，而下标 <code>${j} &le; i - k = ${i - k}</code>，`
+            + `它已经跑到左边界外面了。它是队首（最大的），一直挡在前面，所以必须先把它踢掉。`
+      }));
+    }
+
+    // ---- 步骤④ 记录答案 ----
+    if (i >= k - 1) {
+      out.push(nums[dq[0]]);
+      snap(Object.assign({}, base, {
+        phase: 'record', lines: [12, 13], fresh: out.length - 1,
+        title: `窗口形成，记录最大值 ${nums[dq[0]]}`,
+        desc: `窗口 <code>[${winStart}, ${i}]</code> = <code>[${nums.slice(winStart, i + 1).join(', ')}]</code>。`
+            + `队首下标 ${dq[0]} 的值是 ${nums[dq[0]]}，因为队列递减，它就是这 k 个数里最大的。`
+      }));
+    }
+  }
+
+  snap({
+    phase: 'done', lines: [16], dq: dq.slice(), out: out.slice(),
+    title: '结束，返回 result',
+    desc: `结果 <code>[${out.join(', ')}]</code>。整个过程中每个下标最多进出队各一次，所以总复杂度是 <b>O(n)</b>。`
+  });
+
+  return steps;
+}
+
+const STEPS = buildTrace(NUMS, K);
+
+/* ================= 代码渲染 ================= */
+const CODE = [
+  ['vector&lt;int&gt; maxSlidingWindow(vector&lt;int&gt;&amp; nums, int k) {', ''],
+  ['    std::deque&lt;int&gt; dq;            <span class="c">// 存下标，对应值严格递减</span>', ''],
+  ['    std::vector&lt;int&gt; result;', ''],
+  ['    for (int i = 0; i &lt; nums.size(); ++i) {', ''],
+  ['        <span class="c">// 1. 队尾比 nums[i] 小的都没机会成为最大值，弹出</span>', ''],
+  ['        while (!dq.empty() &amp;&amp; nums[dq.back()] &lt;= nums[i])', ''],
+  ['            dq.pop_back();', ''],
+  ['        dq.push_back(i);', ''],
+  ['        <span class="c">// 2. 队首滑出窗口 [i-k+1, i]，弹出</span>', ''],
+  ['        if (dq.front() &lt;= i - k)', ''],
+  ['            dq.pop_front();', ''],
+  ['        <span class="c">// 3. 窗口形成后，队首即最大值</span>', ''],
+  ['        if (i &gt;= k - 1)', ''],
+  ['            result.push_back(nums[dq.front()]);', ''],
+  ['    }', ''],
+  ['    return result;', ''],
+  ['}', '']
+];
+
+const codeEl = document.getElementById('code');
+codeEl.innerHTML = CODE.map((line, idx) =>
+  `<span class="ln" data-line="${idx + 1}"><span class="num">${idx + 1}</span>${line[0] || '&nbsp;'}</span>`
+).join('');
+
+/* ================= 渲染 ================= */
+const arrEl = document.getElementById('arr');
+const dqEl = document.getElementById('dq');
+const outEl = document.getElementById('out');
+const opEl = document.getElementById('op');
+const ttEl = document.getElementById('tt');
+const dsEl = document.getElementById('ds');
+const counterEl = document.getElementById('counter');
+const slider = document.getElementById('slider');
+
+const OPCLASS = {
+  init: 'init', popback: 'popback', pushback: 'pushback',
+  popfront: 'popfront', record: 'record', done: 'done'
+};
+const OPTEXT = {
+  init: '准备', popback: 'pop_back', pushback: 'push_back',
+  popfront: 'pop_front', record: '记录', done: '完成'
+};
+
+/** 每一格对应「进入这一步之前」的状态，用来展示被弹出的元素去哪了 */
+function renderArray(step) {
+  const dqSet = new Set(step.dq);
+  const killedSet = new Set(step.killed || []);
+  const frontIdx = step.dq.length ? step.dq[0] : -1;
+  arrEl.innerHTML = NUMS.map((v, idx) => {
+    const cls = ['cell'];
+    if (step.winStart !== null && step.i !== null && idx >= step.winStart && idx <= step.i) cls.push('inwin');
+    if (idx === step.i) cls.push('cur');
+    if (dqSet.has(idx)) cls.push('indq');
+    if (idx === frontIdx) cls.push('front');
+
+    // 本步中被弹掉的元素，标一个「已淘汰」
+    const flag = killedSet.has(idx) ? '<span class="flag gone">淘汰</span>' : '';
+
+    return `<div class="${cls.join(' ')}">${flag}<div class="v">${v}</div><div class="i">${idx}</div></div>`;
+  }).join('');
+}
+
+function renderDq(step) {
+  if (!step.dq.length) {
+    dqEl.innerHTML = '<span class="dqempty">[ 空 ]</span>';
+    return;
+  }
+  dqEl.innerHTML = step.dq.map((idx, pos) =>
+    `<div class="dqbox">${pos === 0 ? '<div class="head">队首·最大</div>' : ''}`
+    + `<div class="v">${NUMS[idx]}</div><div class="i">idx ${idx}</div></div>`
+  ).join('');
+}
+
+function renderOut(step) {
+  if (!step.out.length) {
+    outEl.innerHTML = '<span class="dqempty">[ 空 ]</span>';
+    return;
+  }
+  outEl.innerHTML = step.out.map((v, idx) =>
+    `<div class="outbox${idx === step.fresh ? ' fresh' : ''}">${v}</div>`
+  ).join('');
+}
+
+let curStep = 0;
+
+function render(idx) {
+  idx = Math.max(0, Math.min(STEPS.length - 1, idx));
+  curStep = idx;
+  const step = STEPS[idx];
+
+  renderArray(step);
+  renderDq(step);
+  renderOut(step);
+
+  opEl.className = 'op ' + (OPCLASS[step.phase] || 'init');
+  opEl.textContent = OPTEXT[step.phase] || '步骤';
+  ttEl.textContent = (step.i !== null ? `i = ${step.i} · ` : '') + step.title;
+  dsEl.innerHTML = step.desc;
+
+  document.querySelectorAll('pre.code .ln').forEach(el => {
+    el.classList.toggle('hl', step.lines.includes(Number(el.dataset.line)));
+  });
+
+  slider.value = idx;
+  counterEl.textContent = `${idx} / ${STEPS.length - 1}`;
+  document.getElementById('btnPrev').disabled = idx === 0;
+  document.getElementById('btnNext').disabled = idx === STEPS.length - 1;
+}
+
+/* ================= 交互 ================= */
+slider.max = STEPS.length - 1;
+slider.addEventListener('input', e => { stopPlay(); render(Number(e.target.value)); });
+document.getElementById('btnPrev').addEventListener('click', () => { stopPlay(); render(curStep - 1); });
+document.getElementById('btnNext').addEventListener('click', () => { stopPlay(); render(curStep + 1); });
+document.getElementById('btnReset').addEventListener('click', () => { stopPlay(); render(0); });
+
+let timer = null;
+const playBtn = document.getElementById('btnPlay');
+function stopPlay() {
+  if (timer) { clearInterval(timer); timer = null; }
+  playBtn.textContent = '▶ 自动播放';
+}
+playBtn.addEventListener('click', () => {
+  if (timer) { stopPlay(); return; }
+  if (curStep === STEPS.length - 1) render(0);
+  playBtn.textContent = '⏸ 暂停';
+  timer = setInterval(() => {
+    if (curStep >= STEPS.length - 1) { stopPlay(); return; }
+    render(curStep + 1);
+  }, 1100);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') { stopPlay(); render(curStep + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft')  { stopPlay(); render(curStep - 1); e.preventDefault(); }
+});
+
+render(0);
+
+/* ================= 题目分类筛选 ================= */
+const filtersEl = document.getElementById('filters');
+const probRows = [...document.querySelectorAll('#probTable tr[data-cat]')];
+if (filtersEl) {
+  filtersEl.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    [...filtersEl.querySelectorAll('button')].forEach(b => b.classList.toggle('on', b === btn));
+    const f = btn.dataset.f;
+    probRows.forEach(r => r.classList.toggle('hide', f !== 'all' && r.dataset.cat !== f));
+  });
+}
+</script>
+</body>
+</html>

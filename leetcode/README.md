@@ -12,6 +12,9 @@
 | 题号 | 题目 | 难度 | 标签 |
 | ---- | ---- | ---- | ---- |
 | 3 | [无重复字符的最长子串](solutions/0003-longest-substring-without-repeating-characters.md) | 中等 | 滑动窗口 · 哈希表 |
+| 239 | [滑动窗口最大值](solutions/0239-sliding-window-maximum.md) | 困难 | 单调队列 · 滑动窗口 |
+
+> 🎬 带交互图解的题目：[239. 滑动窗口最大值](demos/0239-sliding-window-maximum.html ':ignore :target=_blank') —— 逐步动画演示 `deque` 的每一次进出队。
 
 > 持续更新中。左侧侧边栏按标签分类浏览，右上角可搜索题号或关键词。
 
@@ -61,5 +64,13 @@
    `- [题号. 题目名](solutions/xxx.md)`
 
 4. **更新题目列表**：在上方表格里加一行
+
+5. **（可选）挂交互图解**：如果这道题适合动画演示，把独立的 HTML 放进 `demos/0239-sliding-window-maximum.html` 这样的路径，然后在题解顶部链接它：
+
+   ```markdown
+   > 🎬 **配套交互图解**：[题目名图解](demos/xxxx-题目名.html ':ignore :target=_blank')
+   ```
+
+   `:ignore` 不能省。docsify 默认会把同源链接当成站内路由接管，点进去会把 HTML 当 markdown 渲染，页面直接乱掉；`:ignore` 让它按普通链接打开。
 
 > 小提示：用 Claude Code 的话，说一句「帮我写第 X 题」，就会按这个格式写好并同步更新侧边栏和题目列表。
