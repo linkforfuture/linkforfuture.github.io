@@ -1,0 +1,1482 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="HCCL新Selector完整入门文档：17节源码带读、CostModel、CostTable、算法注册、Tuner与回退。"><title>HCCL新Selector · 完整文档 · Linkforfuture</title><link rel="stylesheet" href="hccl-selector/style.css"></head><body><a class="skip" href="#reference-content">跳到正文</a><header class="site-header"><a class="brand" href="../index.html"><span class="brand-mark">L</span>Linkforfuture<span class="brand-sub">/ 学习笔记</span></a><div class="header-actions"><a href="study.html">XCCL笔记</a><a href="hccl-selector.html">返回交互图解 ↗</a></div></header><main class="reference-shell" id="reference-content"><header class="reference-header"><span class="eyebrow">SOURCE READING / 完整阅读版</span><h1>从零读懂HCCL新Selector</h1><p>从一次AllReduce走进代码 · 完整17节原文整理</p><a class="button primary" href="hccl-selector.html">先看交互图解 ←</a></header><article class="reference-article"><p>这篇文章面向第一次接触HCCL算法选择代码的读者。你不需要先掌握集合通信算法，也不需要一上来就看懂所有C++模板。我们先解释它解决什么问题，再沿着真实调用链逐步展开。</p>
+<p>本文中的“新Selector”特指<code>SelectorEngine</code>、<code>CostModel</code>、<code>CostTable</code>、<code>AlgAttrs</code>组成的选择流程。源码来自HCCL仓库，核对版本为<code>170ddeec539b4d693028ce6e0cf5c58933e4d46d</code>，编写日期为2026-09-12。下面的默认值、支持范围和实现细节都针对这个本地版本。</p>
+<p><strong>先记住一句话：新Selector拿到本次通信的需求和机器连接情况，从可用算法中选出最终代价最小的一个，并把算法名和执行配置交给后续执行流程。</strong></p>
+<p>网页中的源码引用显示为仓库相对路径，可在对应版本的本地HCCL仓库中搜索定位。代码摘录可能省略日志等内容；标注“伪代码”的片段只用于解释，不能直接替换源码。数值算例会明确说明哪些来自代码，哪些是假设。</p>
+<h2>阅读路线</h2>
+<p>第一次阅读建议顺着第1～10节走，先理解整体流程。第二次打开编辑器，对照第11～12节读真实算法。需要排查问题时，直接翻第15～17节。</p>
+<ol>
+<li><a href="#s1">Selector为什么存在</a></li>
+<li><a href="#s2">先认识几个基础概念</a></li>
+<li><a href="#s3">新旧Selector的区别</a></li>
+<li><a href="#s4">源码地图和C++阅读工具</a></li>
+<li><a href="#s5">一次调用怎么进入新Selector</a></li>
+<li><a href="#s6">四份核心数据分别是什么</a></li>
+<li><a href="#s7">算法怎么注册进来</a></li>
+<li><a href="#s8">CostModel怎么生成和缓存</a></li>
+<li><a href="#s9">CostTable怎么过滤和计算</a></li>
+<li><a href="#s10">Tuner、最小值选择和返回结果</a></li>
+<li><a href="#s11">真实算法逐段带读</a></li>
+<li><a href="#s12">沿着真实代码算一次代价</a></li>
+<li><a href="#s13">选完以后如何执行和回退</a></li>
+<li><a href="#s14">如何理解配置和扩展点</a></li>
+<li><a href="#s15">容易被名称和注释误导的地方</a></li>
+<li><a href="#s16">日志排查和源码阅读练习</a></li>
+<li><a href="#s17">自测题与答案</a></li>
+</ol>
+<p><a id="s1"></a></p>
+<h2>1. Selector为什么存在</h2>
+<p>假设4张卡一起训练模型，每张卡算出了一份梯度。它们需要把梯度加起来，再让每张卡都得到相同的结果。</p>
+<p>如果每张卡只有一个数字：</p>
+<pre><code class="language-text">开始：rank0=1，rank1=2，rank2=3，rank3=4
+执行AllReduce，归约操作为SUM
+结束：rank0=10，rank1=10，rank2=10，rank3=10
+</code></pre>
+<p>“把所有人的数据合起来，再让所有人拿到结果”规定了<strong>要完成的任务</strong>。但它没有规定每张卡要先联系谁、发多少数据、分几轮通信、由哪个执行引擎下发任务。</p>
+<p>实现同一个AllReduce，可以有不同通信算法。它们算出的结果应满足算子语义，但运行时间可能不同。小数据量时，启动和同步开销比较显眼；大数据量时，传输效率更关键。卡数、卡之间的连接方式、支持的数据类型也会限制算法是否可用。</p>
+<p>因此，HCCL需要先做一个选择：<strong>这次调用，在当前环境里，应该使用哪个算法实现？</strong></p>
+<p>可以把Selector想成运输方案选择员：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>通信里的对象</th>
+<th>运输类比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本次算子参数</td>
+<td>货物、重量、起点终点和运输要求</td>
+</tr>
+<tr>
+<td>拓扑</td>
+<td>道路连接情况</td>
+</tr>
+<tr>
+<td>算法属性</td>
+<td>每种运输方案能走哪些路、能运哪些货</td>
+</tr>
+<tr>
+<td>代价模型</td>
+<td>各方案的估时方法</td>
+</tr>
+<tr>
+<td>代价表</td>
+<td>针对这批货算出的预计耗时列表</td>
+</tr>
+<tr>
+<td>执行器和模板</td>
+<td>按选定方案组织并完成运输</td>
+</tr>
+</tbody>
+</table></div>
+<p>这个类比只帮助理解职责。实际Selector在本地CPU代码中分析参数和模型；真正的数据传输由后续执行器、模板和HCOMM接口完成。</p>
+<p><a id="s2"></a></p>
+<h2>2. 先认识几个基础概念</h2>
+<h3>2.1 算子、算法、执行器、模板、引擎</h3>
+<p>这五个词不能混用。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>回答的问题</th>
+<th>本文真实例子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>算子（op）</td>
+<td>要完成什么通信任务？</td>
+<td><code>HCCL_CMD_ALLREDUCE</code></td>
+</tr>
+<tr>
+<td>算法（algorithm）</td>
+<td>选定哪一个具体实现方案？</td>
+<td><code>AicpuAllReduceSoleMeshOneShot</code></td>
+</tr>
+<tr>
+<td>执行器（executor）</td>
+<td>如何组织整个算法的资源和执行过程？</td>
+<td><code>InsV2AllReduceSoleExecutor</code></td>
+</tr>
+<tr>
+<td>算法模板（template）</td>
+<td>具体通信步骤怎样实现？</td>
+<td><code>InsTempAllReduceMesh1DOneShot</code></td>
+</tr>
+<tr>
+<td>执行引擎（engine）</td>
+<td>通信任务由哪种机制执行或调度？</td>
+<td><code>AICPU_TS</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>执行器可以组合一个或多个算法模板。一个执行器类也可以通过不同C++模板参数，形成不同的算法实现。</p>
+<p><strong>注意这里有两种“模板”：</strong>“算法模板”是通信实现组件；C++的<code>template &lt;typename ...&gt;</code>是把类型当作参数的编程语法。项目用后者组合前者，两者相关但不是同一个概念。</p>
+<h3>2.2 Rank和通信域</h3>
+<p><code>rank</code>可以先理解成一次通信中的成员编号。4个参与者通常编号为0、1、2、3。</p>
+<p><code>userRank</code>表示本成员的编号，<code>userRankSize</code>表示通信域里一共有多少成员。</p>
+<p><code>HcclComm comm</code>是通信域句柄。句柄类似一个“凭证”：把它交给接口，就可以查询对应通信域的状态、拓扑和上下文，不需要直接访问内部结构。</p>
+<h3>2.3 拓扑</h3>
+<p>拓扑描述参与者之间怎样连接。不同连接方式支持的算法和性能不同。入门时先抓住下面几项：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>字段或术语</th>
+<th>阅读时怎么理解</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>topoLevelNums</code></td>
+<td>当前拓扑包含多少层级</td>
+</tr>
+<tr>
+<td><code>level0Topo</code></td>
+<td>第0层的形状分类</td>
+</tr>
+<tr>
+<td><code>MESH_1D</code></td>
+<td>一种Mesh形状分类</td>
+</tr>
+<tr>
+<td><code>CLOS</code></td>
+<td>一种交换网络形状分类</td>
+</tr>
+<tr>
+<td><code>MESH_1D_CLOS</code></td>
+<td>Mesh与CLOS相关的混合形状分类</td>
+</tr>
+<tr>
+<td><code>level0PcieMix</code></td>
+<td>第0层是否存在代码所识别的PCIe混合场景</td>
+</tr>
+<tr>
+<td><code>netLayerDetails</code></td>
+<td>更细的网络层、实例、连接等信息</td>
+</tr>
+</tbody>
+</table></div>
+<p>先把<code>TopoInfoWithNetLayerDetails</code>当成“当前机器连接情况的说明书”。不要仅凭某个字段名就把某一层固定等同于一台服务器：具体物理层和算法层的映射，要看拓扑生成和<code>MatchTopo</code>代码。</p>
+<h3>2.4 数据个数不等于字节数</h3>
+<p>假设<code>DataDes.count = 262144</code>，类型是FP32，每个元素占4字节：</p>
+<pre><code class="language-text">元素个数 = 262144
+字节数   = 262144 × 4 = 1048576B = 1MiB
+</code></pre>
+<p>普通AllReduce的代价表数据量就是这样计算的。后面有多个名为<code>count</code>的字段，只有其中一部分表示元素个数。</p>
+<h3>2.5 HCCL与HCOMM的边界</h3>
+<p>本仓负责集合通信算子、算法选择和算法组织。拓扑查询、通信资源及基础通信能力通过HCOMM接口提供；跨仓接口使用本仓<code>src/common/hcomm_dlsym/</code>中的动态符号适配。</p>
+<p>阅读Selector时，遇到<code>HcclEngineCtxGet</code>这类调用，可以先理解为“通过接口取通信域上下文”，无需跳进HCOMM内部实现。架构依据见<span class="source-location">架构简介<br><code class="source-path">docs/zh/architecture/architecture-brief.md</code></span>。</p>
+<p><a id="s3"></a></p>
+<h2>3. 新旧Selector的区别</h2>
+<p>仓库里仍然同时存在两套流程。</p>
+<p>旧流程的入口是<span class="source-location">ExecuteSelector::Run<br><code class="source-path">src/ops/op_common/selector/execute_selector.cc</code></span>。普通分支从<code>SelectorRegistry</code>取得该算子的选择器列表，按照<code>std::map</code>中的优先级键顺序遍历；某个选择器返回<code>MATCH</code>，就结束选择。<code>isMc2</code>还有单独处理分支。</p>
+<p>新流程的入口是<span class="source-location">SelectorEngine::Run<br><code class="source-path">src/ops/op_common/selector/selector_engine.cc</code></span>。它先形成候选算法及模型，再为本次调用生成代价表，可选地交给Tuner调整，最后比较代价。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>对比点</th>
+<th>旧流程</th>
+<th>新流程</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主要入口</td>
+<td><code>ExecuteSelector::Run</code></td>
+<td><code>SelectorEngine::Run</code></td>
+</tr>
+<tr>
+<td>组织方式</td>
+<td>按顺序询问选择器是否匹配</td>
+<td>过滤候选，计算并比较代价</td>
+</tr>
+<tr>
+<td>主要注册信息</td>
+<td><code>SelectorRegistry</code>中的选择器</td>
+<td>算法目录、执行器工厂、算法属性</td>
+</tr>
+<tr>
+<td>每次决策的主线</td>
+<td>找到返回<code>MATCH</code>的选择器</td>
+<td>找到有效候选中代价最小的算法</td>
+</tr>
+<tr>
+<td>调优介入点</td>
+<td>由具体旧选择逻辑决定</td>
+<td>Tuner可以修改当前代价表</td>
+</tr>
+</tbody>
+</table></div>
+<p>新流程也有硬规则，例如拓扑条件、数据类型条件和优先保留回调。它不是让所有算法无条件参加比赛。</p>
+<p>另外，“旧Selector分支”和API入口的“HCOMM历史兼容路径”是两个不同层次的分流。第5节会分别说明。</p>
+<p><a id="s4"></a></p>
+<h2>4. 源码地图和C++阅读工具</h2>
+<h3>4.1 先看这些文件</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>建议顺序</th>
+<th>文件</th>
+<th>主要看什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><span class="source-location">selector_engine.cc<br><code class="source-path">src/ops/op_common/selector/selector_engine.cc</code></span></td>
+<td>总流程、引擎候选、最小代价选择</td>
+</tr>
+<tr>
+<td>2</td>
+<td><span class="source-location">op_common.cc<br><code class="source-path">src/ops/op_common/op_common.cc</code></span></td>
+<td>谁调用Selector，选完交给谁</td>
+</tr>
+<tr>
+<td>3</td>
+<td><span class="source-location">cost_model.h<br><code class="source-path">src/ops/op_common/selector/cost_model.h</code></span></td>
+<td>算法目录、模型系数、网络元数据</td>
+</tr>
+<tr>
+<td>4</td>
+<td><span class="source-location">alg_attrs.h<br><code class="source-path">src/ops/op_common/selector/alg_attrs.h</code></span></td>
+<td>算法能力描述</td>
+</tr>
+<tr>
+<td>5</td>
+<td><span class="source-location">cost_model.cc<br><code class="source-path">src/ops/op_common/selector/cost_model.cc</code></span></td>
+<td>拓扑筛选与模型构建</td>
+</tr>
+<tr>
+<td>6</td>
+<td><span class="source-location">cost_table.cc<br><code class="source-path">src/ops/op_common/selector/cost_table.cc</code></span></td>
+<td>本次调用过滤与代价计算</td>
+</tr>
+<tr>
+<td>7</td>
+<td><span class="source-location">alg_attrs_registry.h<br><code class="source-path">src/ops/op_common/selector/alg_attrs_registry.h</code></span></td>
+<td>属性注册宏</td>
+</tr>
+<tr>
+<td>8</td>
+<td><span class="source-location">coll_alg_v2_exec_registry.h<br><code class="source-path">src/ops/op_common/algorithm/executor/registry/coll_alg_v2_exec_registry.h</code></span></td>
+<td>执行器注册宏和算法目录登记</td>
+</tr>
+<tr>
+<td>9</td>
+<td><span class="source-location">ins_v2_all_reduce_sole_executor.cc<br><code class="source-path">src/ops/all_reduce/algorithm/executor/ins_v2_all_reduce_sole_executor.cc</code></span></td>
+<td>真实AllReduce算法实例</td>
+</tr>
+<tr>
+<td>10</td>
+<td><span class="source-location">ins_temp_all_reduce_mesh_1D_one_shot.cc<br><code class="source-path">src/ops/all_reduce/algorithm/template/aicpu/ins_temp_all_reduce_mesh_1D_one_shot.cc</code></span></td>
+<td>模板如何提供代价系数</td>
+</tr>
+</tbody>
+</table></div>
+<p>第一次不要从一个几千行的执行器文件顶部一直读到底。先搜索本文标出的函数名，理解它的输入、输出和调用对象。</p>
+<h3>4.2 看懂主流程需要的C++语法</h3>
+<p>以下是实际函数签名：</p>
+<pre><code class="language-cpp">HcclResult SelectorEngine::Run(
+    HcclComm comm,
+    OpParam&amp; param,
+    TopoInfoWithNetLayerDetails* topoInfo,
+    std::string&amp; algName)
+</code></pre>
+<p>逐项翻译：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>写法</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HcclResult</code></td>
+<td>返回状态码；成功通常是<code>HCCL_SUCCESS</code></td>
+</tr>
+<tr>
+<td><code>SelectorEngine::Run</code></td>
+<td><code>SelectorEngine</code>类里的<code>Run</code>函数</td>
+</tr>
+<tr>
+<td><code>OpParam&amp; param</code></td>
+<td>引用调用方的参数对象，函数里修改它会影响调用方</td>
+</tr>
+<tr>
+<td><code>TopoInfoWithNetLayerDetails* topoInfo</code></td>
+<td>指向拓扑对象的指针，使用<code>-&gt;</code>访问成员</td>
+</tr>
+<tr>
+<td><code>std::string&amp; algName</code></td>
+<td>算法名输出位置，函数会把选中的名字写进去</td>
+</tr>
+</tbody>
+</table></div>
+<p>常见语法还包括：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>写法</th>
+<th>阅读方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>param.opType</code></td>
+<td>取对象的成员</td>
+</tr>
+<tr>
+<td><code>topoInfo-&gt;userRankSize</code></td>
+<td>取指针指向对象的成员</td>
+</tr>
+<tr>
+<td><code>const T&amp; x</code></td>
+<td>通过这个引用读取对象，不修改它</td>
+</tr>
+<tr>
+<td><code>auto x = ...</code></td>
+<td>让编译器推断类型</td>
+</tr>
+<tr>
+<td><code>std::vector&lt;T&gt;</code></td>
+<td>可以增长的数组</td>
+</tr>
+<tr>
+<td><code>std::map&lt;K,V&gt;</code></td>
+<td>根据键查值，按键排序</td>
+</tr>
+<tr>
+<td><code>std::set&lt;T&gt;</code></td>
+<td>保存不重复的值，用于检查是否属于某个集合</td>
+</tr>
+<tr>
+<td><code>nullptr</code></td>
+<td>空指针</td>
+</tr>
+<tr>
+<td><code>return {}</code></td>
+<td>返回空对象；在返回<code>vector</code>的函数中通常表示空数组</td>
+</tr>
+<tr>
+<td><code>Global()</code>、<code>Instance()</code></td>
+<td>本项目中常用于取得一个共享管理对象</td>
+</tr>
+<tr>
+<td><code>std::unique_ptr&lt;T&gt;</code></td>
+<td>管理一个对象的所有权，离开作用域时自动释放</td>
+</tr>
+<tr>
+<td><code>std::call_once(flag, fn)</code></td>
+<td>同一个标志下只执行一次初始化函数</td>
+</tr>
+</tbody>
+</table></div>
+<p>遇到<code>CHK_RET(Foo())</code>，可以先按下面的解释性伪代码阅读：</p>
+<pre><code class="language-cpp">HcclResult ret = Foo();
+if (ret != HCCL_SUCCESS) {
+    return ret;
+}
+</code></pre>
+<p>因此，<code>CHK_RET(SelectorEngine::Global()-&gt;Run(...))</code>返回错误时，外层函数会直接返回错误，不会自动接着运行<code>else</code>里的旧选择器。</p>
+<p><a id="s5"></a></p>
+<h2>5. 一次调用怎么进入新Selector</h2>
+<h3>5.1 总调用链</h3>
+<p>以进入本仓普通选择路径的AllReduce为例：</p>
+<pre><code class="language-text">HcclAllReduce
+  └─ AllReduceOutPlace
+      └─ AllReduceOutPlaceCommon
+          ├─ FillAllReduceOpParam：整理算子参数
+          ├─ HcclGetOpExpansionMode：确定初始执行配置
+          ├─ Selector
+          │   ├─ HcclCalcTopoInfo：取得拓扑信息
+          │   └─ SelectorEngine::Run：新Selector
+          └─ HcclExecOp：根据选定算法进入执行流程
+</code></pre>
+<p>对应<span class="source-location">all_reduce.cc<br><code class="source-path">src/ops/all_reduce/all_reduce.cc</code></span>和<span class="source-location">op_common.cc<br><code class="source-path">src/ops/op_common/op_common.cc</code></span>。</p>
+<p>这是一条有条件的路径。API入口的版本/设备兼容判断、零数据返回，以及公共流程中的单rank处理、CCU快速启动、AIV缓存重放等，都可能提前结束或转入其他路径。因此，设置新Selector开关，不等于每次API调用都会运行<code>SelectorEngine::Run</code>。</p>
+<h3>5.2 新旧流程切换条件</h3>
+<p><code>Selector()</code>中的核心分支如下，省略了旧分支构造对象的具体写法：</p>
+<pre><code class="language-cpp">if (IsNewSelectorEnabled() &amp;&amp; SelectorEngine::IsOpSupported(param.opType)) {
+    CHK_RET(SelectorEngine::Global()-&gt;Run(comm, param, topoInfo.get(), algName));
+} else {
+    // 创建ExecuteSelector，再调用其Run。
+}
+</code></pre>
+<p>需要同时满足两个条件：开关开启，算子在新Selector白名单里。</p>
+<p>开关由<span class="source-location">alg_env_config.cc<br><code class="source-path">src/common/alg_env_config.cc</code></span>中的<code>ParseNewSelector()</code>解析：</p>
+<pre><code class="language-bash">export HCCL_USE_NEW_SELECTOR=1
+</code></pre>
+<p>把它设置在启动通信程序之前。当前代码默认关闭；<code>0</code>表示关闭，<code>1</code>表示开启，其他非空非法值会返回<code>HCCL_E_PARA</code>。不能因为错误日志里有“default to [0]”，就认为非法值会被静默接受。</p>
+<p>当前<code>IsOpSupported()</code>实际包含15种：AllReduce、ReduceScatter、AllGather、Reduce、Scatter、Broadcast、Barrier、BatchSendRecv、AlltoAllV、AlltoAllVC、AllGatherV、ReduceScatterV、Send、Receive、AlltoAll。</p>
+<p>白名单表示可以进入新流程；它不保证任意拓扑、类型和执行配置下都有算法可选。</p>
+<p>若构建启用了<code>HCCL_ALGO_PLUGIN_ENABLE</code>，<code>Selector()</code>在上述分支之前还有算法插件快速路径。该插件成功处理时，可以提前返回。这与稍后修改代价表的Tuner是不同机制。</p>
+<h3>5.3 新Selector内部时序图</h3>
+<p>从上往下读表示时间推进，实线箭头表示调用，虚线箭头表示返回。“模型与缓存”合并表示模型构建、通信域缓存及配置过滤；细节见第8节。下图展示首次调用的普通路径，各项初始化、缓存构建和Tuner调整仍受相应条件控制。</p>
+<div class="diagram-scroll" tabindex="0" aria-label="静态时序图，可横向滚动"><svg id="reference-sequence" viewBox="0 0 780 485" role="img" aria-labelledby="seq-title seq-desc"><title id="seq-title">Selector内部调用时序</title><desc id="seq-desc">选择引擎准备模型，生成本次代价表，让已加载的Tuner调整，然后选出算法。缓存命中时跳过模型构建。</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="currentColor"/></marker></defs><g class="lifelines"><path d="M105 61V467 M305 61V467 M505 61V467 M705 61V467"/></g><g class="actor"><rect x="25" y="14" width="160" height="43" rx="9"/><text x="105" y="40">SelectorEngine</text><rect x="239" y="14" width="132" height="43" rx="9"/><text x="305" y="40">模型与缓存</text><rect x="439" y="14" width="132" height="43" rx="9"/><text x="505" y="40">CostTable</text><rect x="649" y="14" width="112" height="43" rx="9"/><text x="705" y="40">Tuner</text></g>
+    <g data-seq="0" class="seq-step done"><rect class="step-band" x="12" y="75" width="756" height="37" rx="6"/><text x="126" y="99">① 检查AIV_ONLY特殊条件</text><path d="M105 82H117V103H105"/></g>
+    <g data-seq="1" class="seq-step done"><text x="405" y="138">② 首次初始化Tuner</text><path d="M105 148H705"/></g>
+    <g data-seq="2" class="seq-step done"><text x="205" y="178">③ 查询当前执行配置的模型</text><path d="M105 188H305"/></g>
+    <g data-seq="3" class="seq-step done"><rect class="build-box" x="236" y="202" width="294" height="48" rx="8"/><text x="383" y="222">④ 缓存未命中：构建、保存、过滤</text><text class="small-svg" x="383" y="240">拓扑 → 系数 → 优先规则 → 配置</text></g>
+    <g data-seq="4" class="seq-step done"><text x="205" y="278">⑤ 返回CostModel</text><path class="return-line" d="M305 286H105"/></g>
+    <g data-seq="5" class="seq-step done"><text x="305" y="313">⑥ 按本次调用过滤、算cost、应用优先规则</text><path d="M105 323H505"/></g>
+    <g data-seq="6" class="seq-step done"><text x="305" y="350">⑦ 返回CostTable</text><path class="return-line" d="M505 360H105"/></g>
+    <g data-seq="7" class="seq-step done"><text x="405" y="387">⑧ 可选Tuner调整代价表</text><path d="M105 397H705"/><path class="return-line" d="M705 410H105"/></g>
+    <g data-seq="8" class="seq-step done"><rect class="build-box" x="35" y="428" width="430" height="37" rx="7"/><text x="250" y="452">⑨ 选最小有效cost → 输出算法名和执行配置</text></g></svg></div><p class="caption"><a href="hccl-selector.html#sequence">返回图解版逐步查看时序 →</a></p>
+<p>主线是：**获取或构建模型 → 生成本次代价表 → 可选Tuner调整 → 选出算法。**初始化、缓存构建和Tuner调整只在对应条件成立时执行；没有有效候选时返回不支持，详见第10.3节。</p>
+<p><a id="s6"></a></p>
+<h2>6. 四份核心数据分别是什么</h2>
+<h3>6.1 OpParam：这次要做什么</h3>
+<p><code>OpParam</code>字段很多，先关注这些：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>opType</code></td>
+<td>算子类型</td>
+</tr>
+<tr>
+<td><code>DataDes.count</code></td>
+<td>普通算子的数据元素个数</td>
+</tr>
+<tr>
+<td><code>DataDes.dataType</code></td>
+<td>普通算子的数据类型</td>
+</tr>
+<tr>
+<td><code>reduceType</code></td>
+<td>SUM、PROD等归约操作</td>
+</tr>
+<tr>
+<td><code>inputPtr/outputPtr</code></td>
+<td>输入和输出内存地址</td>
+</tr>
+<tr>
+<td><code>inputSize/outputSize</code></td>
+<td>输入和输出内存大小</td>
+</tr>
+<tr>
+<td><code>opExecuteConfig</code></td>
+<td>进入选择时的执行配置；选中后会被更新</td>
+</tr>
+<tr>
+<td><code>engine</code></td>
+<td>后续使用的通信引擎，由外层根据配置设置</td>
+</tr>
+<tr>
+<td><code>opMode/isCapture</code></td>
+<td>单算子/图等执行场景信息</td>
+</tr>
+<tr>
+<td><code>commOpExpansionMode</code></td>
+<td>通信域算子展开模式，例如AIV_ONLY约束来源</td>
+</tr>
+</tbody>
+</table></div>
+<p>AlltoAll系列和V类算子使用各自的数据描述字段，不能一概读取<code>DataDes</code>。</p>
+<h3>6.2 AllAlgos：有哪些已登记的算法</h3>
+<p>在<code>cost_model.h</code>中，<code>AllAlgos</code>保存<code>AlgElement</code>数组。一个条目包含：</p>
+<pre><code class="language-text">algName       算法名
+executorName  执行器名称
+templateName  模板名称数组
+templateNum   模板数量
+opType        算子类型
+</code></pre>
+<p>它像算法目录。登记在目录里，不代表已经适合当前机器，也不代表可以生成有效代价。</p>
+<h3>6.3 AlgAttrs：每个算法有什么能力限制</h3>
+<p><code>AlgAttrs</code>分成两部分：</p>
+<pre><code class="language-text">AlgAttrs
+  ├─ name / opType / engine / algoTypes：算法身份
+  ├─ topo：拓扑侧属性
+  └─ op：本次算子调用侧属性
+</code></pre>
+<p><code>topo</code>用于模型构建阶段，描述层数、拓扑形状、设备、rank数量等要求。</p>
+<p><code>op</code>用于生成本次代价表，描述数据类型、PROD归约、输入输出重叠、浮点保序等要求。</p>
+<p>这样可以把“算法适用条件”放在算法注册附近，而由公共代码统一检查。</p>
+<h3>6.4 CostModel与CostTable：估时方法和本次报价</h3>
+<p>这是最重要的一组区别。</p>
+<pre><code class="language-text">CostModel
+  └─ costAlgoParams[]
+      ├─ algName
+      ├─ param[]：一组或多组(A,B,C,D)
+      └─ count：这个算法有多少组系数
+
+CostTable
+  └─ costs[]
+      ├─ algName
+      └─ cost：针对当前数据量算出的一个数值
+</code></pre>
+<p><code>CostModel</code>回答“这个算法如何估算代价”；<code>CostTable</code>回答“这次调用中，这个算法的代价是多少”。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th><code>count</code>在这里的真实含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OpParam.DataDes.count</code></td>
+<td>数据元素个数</td>
+</tr>
+<tr>
+<td><code>AllAlgos.count</code></td>
+<td>目录中的算法条目数</td>
+</tr>
+<tr>
+<td><code>CostModel.count</code></td>
+<td>模型中的算法条目数</td>
+</tr>
+<tr>
+<td><code>CostAlgoParams.count</code></td>
+<td>单个算法的系数组数；小于等于0时不进入代价表</td>
+</tr>
+<tr>
+<td><code>CostTable.count</code></td>
+<td>当前代价表中的算法条目数</td>
+</tr>
+</tbody>
+</table></div>
+<p>所以<code>cm.costAlgoParams[i].count = 0</code>表示禁用这一算法的模型条目。它不是把本次通信的数据量改成0，也不一定缩短外层模型数组。</p>
+<p><a id="s7"></a></p>
+<h2>7. 算法怎么注册进来</h2>
+<h3>7.1 三个地方分别保存什么</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>保存内容</th>
+<th>后续用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AllAlgos</code></td>
+<td>算法名、算子、执行器名、模板名</td>
+<td>枚举所有已登记算法</td>
+</tr>
+<tr>
+<td><code>CollAlgExecRegistryV2</code></td>
+<td><code>(算子类型, 算法名) → 创建执行器的函数</code></td>
+<td>建模或执行时创建对象</td>
+</tr>
+<tr>
+<td><code>AlgAttrsRegistry</code></td>
+<td><code>算法名 → AlgAttrs</code></td>
+<td>查询适用条件和身份信息</td>
+</tr>
+</tbody>
+</table></div>
+<p>执行器注册宏会同时登记工厂函数和算法目录；属性由另一条宏登记。</p>
+<h3>7.2 一条真实注册语句</h3>
+<p>来自<code>ins_v2_all_reduce_sole_executor.cc</code>：</p>
+<pre><code class="language-cpp">REGISTER_EXEC_V2(
+    HcclCMDType::HCCL_CMD_ALLREDUCE,
+    AicpuAllReduceSoleMeshOneShot,
+    InsV2AllReduceSoleExecutor,
+    TopoMatchOneLevel,
+    InsTempAllReduceMesh1DOneShot);
+</code></pre>
+<p>用自然语言读：</p>
+<p>“登记一个AllReduce算法，名字叫<code>AicpuAllReduceSoleMeshOneShot</code>。需要它时，创建一个组合了<code>TopoMatchOneLevel</code>和<code>InsTempAllReduceMesh1DOneShot</code>的<code>InsV2AllReduceSoleExecutor</code>。”</p>
+<p>组合后的C++类型可以写成：</p>
+<pre><code class="language-cpp">InsV2AllReduceSoleExecutor&lt;
+    TopoMatchOneLevel,
+    InsTempAllReduceMesh1DOneShot&gt;
+</code></pre>
+<p>注册宏内部用<code>#name</code>把宏参数变成字符串，用<code>DefaultExecCreatorV2&lt;...&gt;</code>登记对象创建函数，再调用<code>AddAlgToAllAlgos(...)</code>加入算法目录。</p>
+<p>你没有在<code>Run()</code>里看到显式执行这些注册语句，是因为宏定义了文件级静态变量，初始化这些变量时会调用注册函数。前提是对应代码被构建并加载进程序。</p>
+<h3>7.3 属性注册宏</h3>
+<p><code>REGISTER_ALG_ATTRS(...)</code>内部大致做下面几件事：</p>
+<ol>
+<li>创建一个带默认值的<code>AlgAttrs a</code>。</li>
+<li>让<code>topo</code>和<code>op</code>分别引用<code>a.topo</code>、<code>a.op</code>。</li>
+<li>调用<code>ParseAlgName</code>，从算法名解析身份信息。</li>
+<li>执行宏参数里给出的属性赋值和回调设置。</li>
+<li>把完整属性登记到<code>AlgAttrsRegistry</code>。</li>
+</ol>
+<p>例如下面这种写法中的<code>topo</code>不是神秘的全局变量，而是宏内部提供的引用：</p>
+<pre><code class="language-cpp">// 解释性示意，真实算法的完整属性见第11节。
+REGISTER_ALG_ATTRS(
+    SomeAlgorithm,
+    topo.maxTopoLevelNum = 1;
+    op.isSupportProd = false;
+);
+</code></pre>
+<p>宏里常见的<code>[] { ... }()</code>是“定义一个匿名函数并立即调用”。若把匿名函数存到<code>topoCustomCheck</code>中而没有末尾调用括号，它就是留待以后执行的检查函数。</p>
+<h3>7.4 算法名字也参与程序逻辑</h3>
+<p>把<code>AicpuAllReduceSoleMeshOneShot</code>拆开：</p>
+<pre><code class="language-text">Aicpu | AllReduce | Sole | MeshOneShot
+引擎     算子        执行组织  模板方案标识
+</code></pre>
+<p><code>ParseAlgName</code>、<code>GetEngineByAlgName</code>和<code>AlgoNameMapper</code>都使用名称规则。改名会影响引擎识别、属性解析、算法配置匹配和Tuner维度映射。</p>
+<p>当前引擎前缀映射为：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>算法名前缀</th>
+<th><code>OpExecuteConfig</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Aicpu</code></td>
+<td><code>AICPU_TS</code></td>
+</tr>
+<tr>
+<td><code>Aiv</code></td>
+<td><code>AIV</code></td>
+</tr>
+<tr>
+<td><code>CcuMS</code></td>
+<td><code>CCU_MS</code></td>
+</tr>
+<tr>
+<td><code>CcuSched</code></td>
+<td><code>CCU_SCHED</code></td>
+</tr>
+<tr>
+<td><code>Dpu</code></td>
+<td><code>HOSTCPU</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>无法识别的前缀在<code>GetEngineByAlgName</code>中默认归到<code>AICPU_TS</code>。这不是名字随便写也能正确工作的保证。</p>
+<p><a id="s8"></a></p>
+<h2>8. CostModel怎么生成和缓存</h2>
+<h3>8.1 先决定允许哪些引擎参加</h3>
+<p><code>SelectorEngine::GetEnginePriority()</code>返回下表：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>输入执行配置</th>
+<th>返回的候选引擎</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CCU_MS</code></td>
+<td><code>CCU_MS</code>、<code>CCU_SCHED</code>、<code>AICPU_TS</code>、<code>HOSTCPU</code></td>
+</tr>
+<tr>
+<td><code>CCU_SCHED</code></td>
+<td><code>CCU_SCHED</code>、<code>AICPU_TS</code>、<code>HOSTCPU</code></td>
+</tr>
+<tr>
+<td><code>AIV</code></td>
+<td><code>AIV</code>、<code>AICPU_TS</code>、<code>HOSTCPU</code></td>
+</tr>
+<tr>
+<td><code>AIV_ONLY</code></td>
+<td><code>AIV</code></td>
+</tr>
+<tr>
+<td><code>AICPU_TS</code></td>
+<td><code>AICPU_TS</code>、<code>HOSTCPU</code></td>
+</tr>
+<tr>
+<td><code>HOSTCPU</code></td>
+<td><code>HOSTCPU</code></td>
+</tr>
+<tr>
+<td>其他值</td>
+<td><code>AICPU_TS</code>、<code>HOSTCPU</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>虽然函数名有<code>Priority</code>，<code>FilterCmByEngine()</code>实际把这些引擎放进<code>set</code>，检查每个算法是否属于候选集合。</p>
+<p>**这些候选可以一起进入后续代价竞争。**这里没有“只要CCU_MS有算法，就绝不考虑AICPU”的比较逻辑。后续属性、算法配置和优先规则仍然可能进一步缩小候选集合。</p>
+<p><code>AIV_ONLY</code>的不同之处是集合里只有AIV。</p>
+<h3>8.2 先处理特殊AIV切换</h3>
+<p><code>Run()</code>最前面会检查<code>AutoSelectorBase::IsRollBackAiv()</code>。某些受资源限制的PCIe混合场景下，它会把<code>param.opExecuteConfig</code>改成<code>AIV_ONLY</code>。</p>
+<p>具体条件在<span class="source-location">auto_selector_base.cc<br><code class="source-path">src/ops/op_common/selector/auto_selector_base.cc</code></span>：涉及部分AlltoAll/INT64归约场景，以及部分单服务器P2P连接场景。</p>
+<p>这一步发生在获取模型之前。因此，分析一次选择时，不能只看进入<code>Run()</code>前记录的执行配置。</p>
+<h3>8.3 模型构建主循环</h3>
+<p><code>CostModelManager::InitCostModel()</code>可以按下面的伪代码理解：</p>
+<pre><code class="language-cpp">for (算法目录里的每个算法) {
+    if (!拓扑属性匹配) {
+        continue;
+    }
+
+    executor = 根据算子类型和算法名创建执行器;
+    if (executor不存在) {
+        continue;
+    }
+
+    params = executor-&gt;CalcCostCoeff(...);
+    if (params为空) {
+        continue;
+    }
+
+    保存算法名和系数数组;
+    登记executor-&gt;GetAlgNetMeta(...);
+}
+
+应用拓扑优先规则;
+</code></pre>
+<p>这里遍历全局算法目录，使用每个目录条目自己的<code>opType</code>创建执行器。它没有在循环起点只保留“本次调用的算子类型”；本次算子类型的筛选主要在代价表阶段。</p>
+<p><code>CalcCostCoeff()</code>返回空数组表示这次没有可用模型，日志写为<code>uncalibrated</code>。原因既可能是未实现模型，也可能是模板显式限制了rank数量，或更细的拓扑匹配失败。不要把这个日志词只理解成“缺少实测标定数据”。</p>
+<h3>8.4 拓扑过滤具体检查什么</h3>
+<p><code>CheckAlgoMatchTopoWithReason()</code>根据属性检查：层数范围、第0层形状、部分CCU场景的Mesh类型、2Die支持、PCIe混合支持、Level1Nhr、Mesh连通要求、设备类型、HostDpuOnly、rank上限，以及自定义拓扑回调。</p>
+<p>不是每个字段在所有场景都无条件检查。例如Mesh子类型检查有引擎和形状条件。学习具体算法时，应从其注册属性跳到该函数，看相应字段被怎样使用。</p>
+<p>位掩码判断容易看花眼。下面的表达式意思是“允许两类形状”：</p>
+<pre><code class="language-cpp">topo.supportLevel0Topos = LEVEL0_TOPO_MESH_1D | LEVEL0_TOPO_MESH_1D_CLOS;
+</code></pre>
+<p>每种形状对应一个二进制位，<code>|</code>把允许的位合起来；检查时用<code>&amp;</code>判断当前形状对应的位是否设置。</p>
+<h3>8.5 topoPriorityCheck会提前缩小竞争范围</h3>
+<p><code>ApplyTopoPriority()</code>按<code>(opType, engine)</code>分组。</p>
+<p>如果某个组里至少一个算法的<code>topoPriorityCheck</code>返回<code>true</code>，该组只保留命中的算法。其他算子或其他引擎的组不受这个组的规则影响。</p>
+<p>所以拓扑优先规则是“改变候选集合”，不是“给算法的cost减一点分”。</p>
+<h3>8.6 缓存保存在哪里</h3>
+<p><code>SelectorEngine::InitCostModel()</code>通过通信域上下文接口保存模型，标签这样构成：</p>
+<pre><code class="language-cpp">std::string costModelTag =
+    std::string(&quot;costmodel&quot;) + &quot;_&quot; + ENGINE_STR_MAP.at(param.opExecuteConfig);
+</code></pre>
+<p>可以理解成：**每个通信域按进入选择时的执行配置保存一份模型。**发生引擎配置回退时，会查询不同标签。</p>
+<p>这不是“只存该引擎的算法”：某份模型可以包含该配置允许的多个候选引擎。标签里也没有数据量或当前算子类型。</p>
+<p>第一次没有缓存时会构建和保存；后续进入<code>Run()</code>命中该标签，直接使用缓存模型，但仍然生成本次调用的代价表。</p>
+<p>模型包含指针，不能只复制结构体外壳。代码先存放<code>CostModel</code>头和<code>CostAlgoParams</code>数组，再为每个算法的系数数组做独立复制。否则临时模型释放后，缓存里的指针可能指向已经释放的内存。</p>
+<p>Tuner是否完成初始化使用另一个独立标签<code>&quot;tuner_init&quot;</code>，不随每份执行配置模型重复初始化。</p>
+<h3>8.7 算法配置过滤</h3>
+<p>保存模型后，代码依次调用：</p>
+<pre><code class="language-cpp">FilterCmByEngine(*storedCm, candidateEngines);
+FilterCmByHcclAlgo(comm, *storedCm, candidatePrefixes);
+</code></pre>
+<p>前者把候选集合之外的算法<code>count</code>置0；后者根据通信域算法配置或<code>HCCL_ALGO</code>进一步处理模型。</p>
+<p>这两类过滤属于模型初始化路径。不能假定在进程中途修改环境变量后，已经缓存的模型就会自动重新过滤。</p>
+<p><a id="s9"></a></p>
+<h2>9. CostTable怎么过滤和计算</h2>
+<h3>9.1 为什么每次还要生成表</h3>
+<p>同一通信域可能先做一个小数据FP32 AllReduce，再做大数据FP16 AllReduce，还可能调用AllGather。</p>
+<p>拓扑大体相同，模型可以复用；本次算子、数据量和内存条件发生了变化，候选和代价需要重新计算。</p>
+<p><code>CostTableGen()</code>调用<code>InitAndFilterByAttrs()</code>，依次处理：</p>
+<ol>
+<li>跳过系数组数小于等于0的模型条目。</li>
+<li>查找算法属性；没有属性则跳过。</li>
+<li>检查属性里的<code>opType</code>是否等于本次算子类型。</li>
+<li>检查数据类型、PROD、内存重叠、保序和自定义调用条件。</li>
+<li>计算当前数据量下的cost并写入表。</li>
+<li>应用<code>opPriorityCheck</code>优先保留规则。</li>
+</ol>
+<h3>9.2 OpAttrs里的过滤规则</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>属性</th>
+<th>什么情况下会被过滤</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>supportedDataTypes</code></td>
+<td>非空时，当前类型不在白名单里</td>
+</tr>
+<tr>
+<td><code>unsupportedDataTypes</code></td>
+<td>白名单为空时，当前类型在黑名单里</td>
+</tr>
+<tr>
+<td><code>isSupportProd</code></td>
+<td>为false且本次归约操作是PROD</td>
+</tr>
+<tr>
+<td><code>isSupportInplace</code></td>
+<td>为false且输入输出地址区间有重叠</td>
+</tr>
+<tr>
+<td><code>isSupportFloatOrderPreserved</code></td>
+<td>本次要求严格保序，但算法不支持</td>
+</tr>
+<tr>
+<td><code>opCustomCheck</code></td>
+<td>设置了回调，且回调返回false</td>
+</tr>
+</tbody>
+</table></div>
+<p>白名单非空时走白名单分支，不再检查黑名单。</p>
+<p>当前<code>IsInputOutputOverlap()</code>实际比较输入输出地址区间是否相交，不只是判断<code>inputPtr == outputPtr</code>。</p>
+<p>浮点加法会受到计算顺序影响；某些调用对归约顺序有更严格要求，所以“数学上都在求和”并不意味着所有归约实现都满足该调用约束。</p>
+<h3>9.3 opPriorityCheck与拓扑优先规则不一样</h3>
+<p><code>opPriorityCheck</code>在本次已经通过普通过滤的代价表中检查。</p>
+<p>一旦有算法命中，正常分配成功的路径会只保留命中的算法。<strong>当前实现没有按引擎分组</strong>，因此它可以影响不同候选引擎之间的竞争。</p>
+<p>对照记忆：<code>topoPriorityCheck</code>按<code>(算子, 引擎)</code>分组；<code>opPriorityCheck</code>作用于本次代价表。</p>
+<h3>9.4 代价计算使用哪个数据量</h3>
+<p>实际代码是<code>CalcCostTableDataSize()</code>：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>算子种类</th>
+<th>当前实现取值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>普通算子，例如AllReduce</td>
+<td><code>DataDes.count × 类型字节数</code></td>
+</tr>
+<tr>
+<td>AllGatherV、ReduceScatterV</td>
+<td><code>vDataDes.counts</code>中的最大count乘类型字节数</td>
+</tr>
+<tr>
+<td>AlltoAll、AlltoAllV、AlltoAllVC</td>
+<td><code>sendCounts</code>指向的第一个值乘发送类型字节数</td>
+</tr>
+<tr>
+<td>BatchSendRecv</td>
+<td>第一条item的count乘类型字节数</td>
+</tr>
+<tr>
+<td>Barrier</td>
+<td>0</td>
+</tr>
+</tbody>
+</table></div>
+<p>这是该版本的实际取值，不能把AlltoAllV一行改读为“发送数组全部求和”。模型输入数据量、接口参数<code>inputSize</code>和日志数据量也不应未经核对就视为完全相同。</p>
+<h3>9.5 A、B、C、D分别是什么意思</h3>
+<p><code>CostModelParam</code>包含四个浮点数：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>系数</th>
+<th>阅读时的含义</th>
+<th>在计算中的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>A</code></td>
+<td>跨卡传输随数据量增长的代价系数</td>
+<td><code>A / util × dataSize</code></td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td>本地拷贝、归约等随数据量增长的代价系数</td>
+<td><code>B × dataSize</code></td>
+</tr>
+<tr>
+<td><code>C</code></td>
+<td>模板的固定时延项</td>
+<td>直接加入分段代价</td>
+</tr>
+<tr>
+<td><code>D</code></td>
+<td>任务展开/下发模型项</td>
+<td>各段累加后，与通信侧聚合值取最大</td>
+</tr>
+</tbody>
+</table></div>
+<p>模型使用字节和秒量纲计算；例如<code>InitBandwidth()</code>把56乘以十亿存为带宽，<code>CalcLatencyParams()</code>中<code>0.000002</code>表示2微秒。源码中的这些常数是该模型的参数，不能当作所有机器的实测规格或性能承诺。</p>
+<p><code>util</code>是UB带宽利用率修正值。从公式看，利用率越低，同样数据的跨卡传输估计越慢。</p>
+<p>一个分段的实际公式为：</p>
+<pre><code class="language-text">segCost = (A / util + B) × dataSize + C
+</code></pre>
+<p>如果算法只有一个分段：</p>
+<pre><code class="language-text">cost = max(segCost, D)
+</code></pre>
+<p>如果有多个分段，先按组内规则聚合，再对组求和；所有分段的D累加，最后取：</p>
+<pre><code class="language-text">cost = max(各组代价之和, 所有D之和)
+</code></pre>
+<p>因此不能把当前公式简写成<code>A×size+B+C+D</code>，也不能把D直接加到每个分段中。</p>
+<h3>9.6 多段模型为什么需要AlgNetMeta</h3>
+<p>多阶段算法可能在不同网络上传数据，各段传输比例也不同。<code>AlgNetMeta</code>保存与系数段对应的说明：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>netTypes</code></td>
+<td>各段使用的网络类型，用于选利用率表</td>
+</tr>
+<tr>
+<td><code>dataRatios</code></td>
+<td>查利用率时使用的数据量比例</td>
+</tr>
+<tr>
+<td><code>rankSizes</code></td>
+<td>部分算法修正单次传输量时使用的rank数</td>
+</tr>
+<tr>
+<td><code>groupSizes</code></td>
+<td>每组包含多少个系数段</td>
+</tr>
+<tr>
+<td><code>intraGroupMode</code></td>
+<td>组内求和还是取最大</td>
+</tr>
+<tr>
+<td><code>interGroupMode</code></td>
+<td>有该字段，但当前<code>CalcAlgCost()</code>组间固定求和</td>
+</tr>
+</tbody>
+</table></div>
+<p>例如<code>groupSizes={2,1}</code>，组内模式为MAX，表示前两段取最大值形成第一组，第三段形成第二组，两个组再相加。</p>
+<pre><code class="language-text">通信侧聚合值 = max(seg0, seg1) + seg2
+最终cost     = max(通信侧聚合值, D0 + D1 + D2)
+</code></pre>
+<p>这是一种建模方式，不代表代码测量了真实执行时的重叠时间。</p>
+<h3>9.7 利用率怎么查</h3>
+<p><code>QueryUbUtil()</code>在Mesh/CLOS表中，用<code>lower_bound</code>找第一个上界大于等于传输量的档位；超出全部档位用最后一个。它是分档查表，没有做线性插值。</p>
+<p>查表的数据量一般为：</p>
+<pre><code class="language-text">perTransferSize = dataSize × dataRatio
+</code></pre>
+<p>NHR/NHR_MULTILINK还会乘<code>rankSize/2</code>修正比例。AllGather在CLOS网络上小于1MiB的数据按1MiB查表；AIV会对查到的利用率做<code>util / 0.85 × 0.65</code>修正。</p>
+<p>注意：比例主要用于确定查表档位，主公式仍乘<code>dataSize</code>。A/B系数本身也可能已经包含数据比例，不能在主公式外再随意乘一次比例。</p>
+<p><a id="s10"></a></p>
+<h2>10. Tuner、最小值选择和返回结果</h2>
+<h3>10.1 Tuner拿到的是已生成的代价表</h3>
+<p><code>TunerEnrichCostTable()</code>先生成表。只有表非空且Tuner已加载，才会补充算法维度并调用插件。</p>
+<p><code>AlgoNameMapper</code>把名字拆成适合插件匹配的维度。例如本文算法可得到：</p>
+<pre><code class="language-text">algName      = AicpuAllReduceSoleMeshOneShot
+engineName   = aicpu
+executorName = sole
+templateName = meshoneshot
+</code></pre>
+<p>这里的<code>executorName=sole</code>是插件维度名，与<code>AllAlgos</code>里的完整执行器类名含义不同。</p>
+<p><span class="source-location">hccl_tuner_plugin.h<br><code class="source-path">src/ops/op_common/selector/inc/hccl_tuner_plugin.h</code></span>规定插件可以修改<code>cost</code>：负值表示禁用，0表示偏好，正值表示覆盖原代价，不改则沿用模型值。名字等信息是只读的。</p>
+<p>插件收到的是过滤后的候选表，没有一个“任意追加算法并跳过能力检查”的正常接口。给某算法设为0通常使它优先于正代价算法，但若多个算法都是0，仍然会出现并列。</p>
+<p>加载相关实现见<span class="source-location">tuner_setup.cc<br><code class="source-path">src/common/tuner/tuner_setup.cc</code></span>，环境变量名称是<code>HCCL_TUNER_PLUGIN</code>。没有Tuner也能完成模型选择。</p>
+<h3>10.2 SelectMinCost逐段阅读</h3>
+<p>以下摘出实际循环的关键判断：</p>
+<pre><code class="language-cpp">int minIdx = -1;
+float minCost = 0.0f;
+
+for (int i = 0; i &lt; ct.count; ++i) {
+    const char* name = ct.costs[i].algName;
+    float cost = ct.costs[i].cost;
+
+    if (name == nullptr || cost &lt; 0.0f) {
+        continue;
+    }
+    if (minIdx == -1 || cost &lt; minCost) {
+        minIdx = i;
+        minCost = cost;
+        // 实际代码还记录并列算法，用于日志。
+    }
+}
+</code></pre>
+<p><code>minIdx=-1</code>表示还没找到有效候选。因此即使<code>minCost</code>初始值是0，第一个正代价候选也能进入：判断条件左边的<code>minIdx == -1</code>为真。</p>
+<p>以后只有遇到更小的cost才替换。代价完全相等时保留原索引，并记录并列日志。因此并列时选表中第一个，不能把它理解成指定引擎获胜，或稳定选择某个按名字排序的算法。</p>
+<p>最后写出两个结果：</p>
+<pre><code class="language-cpp">algName = ct.costs[minIdx].algName;
+param.opExecuteConfig = GetEngineByAlgName(algName);
+</code></pre>
+<p>例如以<code>CCU_MS</code>配置进入，若最终选中Aicpu前缀算法，执行配置就更新为<code>AICPU_TS</code>。后续<code>Selector()</code>调用<code>SetCommEngine(param)</code>设置实际通信引擎。</p>
+<h3>10.3 没选到会怎样</h3>
+<p>代价表为空，或者没有名字非空且cost非负的候选时，返回<code>HCCL_E_NOT_SUPPORT</code>。</p>
+<p><code>Run()</code>在选择后释放本次<code>ct.costs</code>，成功则打印结果；失败时打印错误。若此时是<code>AIV_ONLY</code>，还会调用<code>LogAivOnlyNotMatch()</code>补充拓扑、参数以及AIV算法的拓扑/算子过滤原因。</p>
+<p>这份AIV补充日志没有覆盖每一个阶段。例如一个算法通过拓扑和算子检查，仍可能因没有模型系数、算法配置或Tuner而没有成为有效候选。</p>
+<p><a id="s11"></a></p>
+<h2>11. 真实算法逐段带读</h2>
+<p>现在用<code>AicpuAllReduceSoleMeshOneShot</code>把前面的概念连起来。</p>
+<h3>11.1 第一步：找到注册和完整属性</h3>
+<p>打开<span class="source-location">ins_v2_all_reduce_sole_executor.cc<br><code class="source-path">src/ops/all_reduce/algorithm/executor/ins_v2_all_reduce_sole_executor.cc</code></span>，搜索算法名。注册信息如下：</p>
+<pre><code class="language-text">算子：HCCL_CMD_ALLREDUCE
+算法：AicpuAllReduceSoleMeshOneShot
+执行器：InsV2AllReduceSoleExecutor
+拓扑匹配器：TopoMatchOneLevel
+模板：InsTempAllReduceMesh1DOneShot
+</code></pre>
+<p>紧接着的属性注册，整理排版后如下：</p>
+<pre><code class="language-cpp">REGISTER_ALG_ATTRS(
+    AicpuAllReduceSoleMeshOneShot,
+    topo.maxTopoLevelNum = 1;
+    topo.supportLevel0Topos =
+        LEVEL0_TOPO_MESH_1D | LEVEL0_TOPO_MESH_1D_CLOS;
+    topo.isSupportLevel0PcieMix = true;
+    topo.requireAllMeshConnected = true;
+    topo.topoCustomCheck = [](const TopoInfoWithNetLayerDetails* topo) -&gt; bool {
+        if (topo-&gt;level0Topo == Level0Shape::MESH_1D_CLOS) {
+            if (!topo-&gt;level0PcieMix) {
+                bool isEqual = false;
+                AutoSelectorBase::CheckMeshNumEqualToClosNum(topo, isEqual);
+                return isEqual &amp;&amp; topo-&gt;userRankSize &lt;= 4;
+            }
+            return true;
+        }
+        return true;
+    });
+</code></pre>
+<p>从上到下读：</p>
+<ol>
+<li>最大拓扑层数设为1；结合<code>TopoAttrs</code>默认最小层数1，要求层数为1。</li>
+<li>允许两类第0层形状。</li>
+<li>声明支持PCIe混合，并要求相应场景的Mesh连通检查通过。</li>
+<li>自定义检查在“混合形状且没有PCIe混合”这一分支中，还要求Mesh/Clos数量检查通过且rank数不超过4。</li>
+<li>其他分支返回true，但仍须通过前面的公共检查及后续模型条件。</li>
+</ol>
+<p>这里没有赋值的属性继续使用<code>alg_attrs.h</code>里的默认值。阅读属性注册时，必须同时看默认值，不能把“没有写”理解成“没有限制”。</p>
+<h3>11.2 第二步：模型管理器创建执行器</h3>
+<p>模型管理器根据目录中的算子类型和算法名执行：</p>
+<pre><code class="language-cpp">auto exec = CollAlgExecRegistryV2::Instance().GetAlgExec(alg.opType, alg.algName);
+</code></pre>
+<p>它得到的是带有前面两个C++类型参数的执行器对象。接着：</p>
+<pre><code class="language-cpp">auto params = exec-&gt;CalcCostCoeff(comm, topoInfo, alg.algName, param);
+</code></pre>
+<p>由于基类函数是<code>virtual</code>，这里会调用真实执行器类型的实现。这就是“通过统一接口调用不同算法的建模逻辑”。</p>
+<h3>11.3 第三步：执行器把拓扑转成模板建模参数</h3>
+<p>同一文件中搜索<code>InsV2AllReduceSoleExecutor&lt;...&gt;::CalcCostCoeff</code>。</p>
+<p>该函数首先查属性，用<code>TopoMatchOneLevel</code>执行更具体的<code>MatchTopo</code>，取得算法层到物理层的映射。匹配失败则返回空数组。</p>
+<p>随后读取rank数、网络类型、端口数量；端口数组为空也返回空数组。</p>
+<p>最后核心调用是：</p>
+<pre><code class="language-cpp">return InsAlgTemplate::CalcCostCoeff(CalcCostCoeffParam{
+    rankSize,
+    1.0f / rankSize,
+    netTypeLevel0,
+    BufferType::INPUT,
+    BufferType::OUTPUT,
+    BufferType::HCCL_BUFFER,
+    portNumLevel0,
+    isPod
+});
+</code></pre>
+<p>此处的<code>InsAlgTemplate</code>已经在注册时绑定成<code>InsTempAllReduceMesh1DOneShot</code>。</p>
+<p><code>CalcCostCoeffParam</code>是一个参数结构体。花括号按字段顺序填入rank数、数据比例、网络类型、输入/输出/临时缓冲区角色、端口和Pod信息。这里的<code>BufferType</code>描述缓冲区角色，不是用户数据的FP32/FP16类型。</p>
+<h3>11.4 第四步：模板计算A/B/C/D</h3>
+<p>打开<span class="source-location">ins_temp_all_reduce_mesh_1D_one_shot.cc<br><code class="source-path">src/ops/all_reduce/algorithm/template/aicpu/ins_temp_all_reduce_mesh_1D_one_shot.cc</code></span>的<code>CalcCostCoeff()</code>。</p>
+<p>第一条关键约束：</p>
+<pre><code class="language-cpp">if (param.rankSize &gt; 8) {
+    return {};
+}
+</code></pre>
+<p>即使前面拓扑属性检查通过，超过8个rank仍然拿不到该模板模型。</p>
+<p>模板随后计算：</p>
+<pre><code class="language-cpp">float n = param.dataRatio * param.rankSize;
+</code></pre>
+<p>执行器传来<code>1/rankSize</code>，所以这里得到<code>n=1</code>。同一个执行器还用于其他模板，因此OneShot在模板内部调整了传入的数据比例。</p>
+<p>然后调用模型管理器的公共函数：</p>
+<pre><code class="language-text">CalcMeshParam        → 得到跨卡传输系数A
+CalcLocalCopyParams  → 得到本地拷贝系数B1
+CalcLocalReduceParams→ 得到本地归约系数B2
+B = B1 + (rankSize - 1) × B2
+CalcLatencyParams   → 得到C
+CalcLaunchParams    → 得到D
+</code></pre>
+<p>最后返回一个元素的数组<code>{{A,B,C,D}}</code>。这就成为这个算法的一段模型。</p>
+<h3>11.5 第五步：网络元数据与系数一起配合使用</h3>
+<p>执行器的<code>GetAlgNetMeta()</code>返回：</p>
+<pre><code class="language-text">netTypes       = {该物理层网络类型}
+groupSizes     = {1}
+intraGroupMode = SUM
+dataRatios     = {1 / rankSize}
+rankSizes      = {rankSize}
+</code></pre>
+<p>模板内部用于构造系数的<code>n=1</code>，和元数据用于查利用率的<code>dataRatio=1/rankSize</code>，处在两个不同计算位置。应沿数据流分别理解，不能只看到两个比例不同就合并或替换。</p>
+<h3>11.6 第六步：本次代价表可能保留，也可能排除它</h3>
+<p>如果当前调用是AllReduce，并且通过数据类型、内存、保序等条件，它才会被算入当前表。</p>
+<p>之后还要经过优先规则、可选Tuner和最小值比较。所以“算法注册成功”“模型计算成功”和“最终选中”是三个不同结果。</p>
+<p><a id="s12"></a></p>
+<h2>12. 沿着真实代码算一次代价</h2>
+<h3>12.1 先规定算例前提</h3>
+<p>下面是<strong>按当前源码模型常数计算的教学算例，不是上板性能测试结果</strong>。假设：</p>
+<ul>
+<li>已进入新Selector普通路径，拓扑匹配和端口查询成功。</li>
+<li>4个rank，第0层是用于模型计算的1DMesh网络。</li>
+<li>AllReduce、FP32、SUM，<code>count=262144</code>。</li>
+<li>本文OneShot算法没有被配置、其他属性或优先规则排除。</li>
+<li>不要求严格保序，未由Tuner覆盖cost。</li>
+</ul>
+<p>这些前提用于说明它“如果进入代价表，会得到怎样的模型值”。不能由此断言它一定是该机器最终选中的算法。</p>
+<h3>12.2 算出数据量与A/B/C/D</h3>
+<p>数据量：</p>
+<pre><code class="language-text">S = 262144 × 4 = 1048576B
+</code></pre>
+<p>执行器传入<code>dataRatio=1/4</code>，OneShot模板算出<code>n=(1/4)×4=1</code>。</p>
+<p>对于Mesh，<code>CalcMeshParam()</code>中：</p>
+<pre><code class="language-text">A = 1 / (56 × 10^9)
+  ≈ 1.7857143 × 10^-11 秒/字节
+</code></pre>
+<p>这里输入缓冲区角色为INPUT，临时缓冲区角色为HCCL_BUFFER，两者不同，所以B包含本地拷贝项：</p>
+<pre><code class="language-text">B = 1 / (750 × 10^9) + 3 / (483 × 10^9)
+  ≈ 7.5445135 × 10^-12 秒/字节
+</code></pre>
+<p>模板设<code>kernelNum=1</code>，因此：</p>
+<pre><code class="language-text">C = 1 × 2微秒 = 2微秒
+</code></pre>
+<p>任务数来自源码辅助函数：</p>
+<pre><code class="language-text">transTaskNum = 5 × (4 - 1) = 15
+syncTaskNum  = 2 × (4 - 1) = 6
+taskNum      = 15 + 6 × 2 + (4 - 1) = 30
+D            = 30 × 0.5微秒 = 15微秒
+</code></pre>
+<h3>12.3 查利用率并计算分段代价</h3>
+<p>网络元数据的数据比例为<code>1/4</code>：</p>
+<pre><code class="language-text">perTransferSize = 1048576 / 4 = 262144B
+</code></pre>
+<p>Mesh利用率表第一个上界是1MiB，262144B命中这一档：</p>
+<pre><code class="language-text">util = 0.7135
+</code></pre>
+<p>带入公式：</p>
+<pre><code class="language-text">跨卡部分 = A / util × S ≈ 26.2433微秒
+本地部分 = B × S        ≈ 7.9110微秒
+固定部分 = C            = 2微秒
+
+segCost ≈ 36.1543微秒
+cost = max(segCost, D)
+     ≈ 36.1543微秒
+</code></pre>
+<p>数值经过四舍五入；程序实际使用<code>float</code>，末位可能有小差异。代价表内部存的秒数约为<code>0.00003615</code>。</p>
+<p>这个计算过程把4个文件串了起来：执行器负责传参数，模板负责组合系数，<code>CostModelManager</code>提供带宽/时延模型，<code>CostTableManager</code>代入本次数据量。</p>
+<h3>12.4 再演示一次“比较并选中”</h3>
+<p>下面为了说明选择逻辑，<strong>候选X/Y及其数值完全是假设，并非仓库真实算法名或测量值</strong>：</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>当前候选</th>
+<th style="text-align:right">cost</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本文OneShot算法</td>
+<td style="text-align:right">约36.15微秒</td>
+<td>有效，参与比较</td>
+</tr>
+<tr>
+<td>候选X</td>
+<td style="text-align:right">28微秒</td>
+<td>有效，目前最小</td>
+</tr>
+<tr>
+<td>候选Y</td>
+<td style="text-align:right">-1</td>
+<td>无效，跳过</td>
+</tr>
+</tbody>
+</table></div>
+<p>假设表就是这三项，结果选X。若Tuner把OneShot的cost改为0，就改选OneShot。若某个优先规则在Tuner之前已把X排除，Tuner拿到的表里就不会有X。</p>
+<h3>12.5 为什么改数据量可能换算法</h3>
+<p>为了单独观察数据量影响，再构造两条教学曲线，设<code>u=S/1MiB</code>：</p>
+<pre><code class="language-text">算法P：tP = 5 + 20u 微秒
+算法Q：tQ = 20 + 5u 微秒
+</code></pre>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>数据量</th>
+<th style="text-align:right">P</th>
+<th style="text-align:right">Q</th>
+<th>较小者</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1MiB</td>
+<td style="text-align:right">7微秒</td>
+<td style="text-align:right">20.5微秒</td>
+<td>P</td>
+</tr>
+<tr>
+<td>1MiB</td>
+<td style="text-align:right">25微秒</td>
+<td style="text-align:right">25微秒</td>
+<td>相等</td>
+</tr>
+<tr>
+<td>4MiB</td>
+<td style="text-align:right">85微秒</td>
+<td style="text-align:right">40微秒</td>
+<td>Q</td>
+</tr>
+</tbody>
+</table></div>
+<p>P启动轻，随数据量增长快；Q启动重，但大数据增长慢。这解释了为什么同一通信域模型可以复用，最终算法仍可能随着数据量变化。真实模型还包括查表档位、D项和各类过滤，曲线不一定如此简单。</p>
+<p><a id="s13"></a></p>
+<h2>13. 选完以后如何执行和回退</h2>
+<h3>13.1 从字符串变回执行器</h3>
+<p><code>Selector()</code>拿到结果后，会检查算法名、设置通信引擎、按需准备Kernel、设置算法资源标签等。</p>
+<p><code>HcclExecOp()</code>中再次通过注册表创建执行器：</p>
+<pre><code class="language-cpp">auto executor = CollAlgExecRegistryV2::Instance().GetAlgExec(param.opType, algName);
+</code></pre>
+<p>建模时创建执行器，是为了调用<code>CalcCostCoeff()</code>和<code>GetAlgNetMeta()</code>；执行时创建执行器，是为了资源处理与算法运行。注册的是创建函数，不应把注册表理解成只保存一个永远复用的运行对象。</p>
+<p>后续通过<code>HcclGetAlgRes()</code>等准备或复用资源，再根据不同引擎进入对应执行路径。Selector返回成功并不表示数据传输已经完成。</p>
+<h3>13.2 三种不同的“回退”</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>发生位置</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>特殊场景改为AIV_ONLY</td>
+<td><code>SelectorEngine::Run</code>开头</td>
+<td>开始建模/选择前改变允许的引擎范围</td>
+</tr>
+<tr>
+<td>候选引擎中选到其他引擎算法</td>
+<td><code>SelectMinCost</code></td>
+<td>同一轮竞争产生的选择结果</td>
+</tr>
+<tr>
+<td>资源或CCU协商导致重新选择</td>
+<td><code>FallbackOp/ReSelector</code>等</td>
+<td>已经进入后续流程，再降低配置或按协商结果重选</td>
+</tr>
+</tbody>
+</table></div>
+<p>这些机制不能混成“新Selector失败就跑旧Selector”。普通新旧分支没有这种自动失败回退。</p>
+<h3>13.3 ReSelector做什么</h3>
+<p><code>ReSelector()</code>把传入的<code>executeConfig</code>写到<code>param.opExecuteConfig</code>，复用已有拓扑，再按同样的新旧开关条件选择。</p>
+<p>新路径因为模型标签包含执行配置，会取得该配置对应的模型。</p>
+<p>在满足编译版本条件的<code>FallbackOp()</code>中，CCU回退链是<code>CCU_MS → CCU_SCHED → AICPU_TS</code>；较低编译版本分支直接指定AICPU_TS。外层还有回退结果缓存和CCU参数协商路径，所以不能只看一次<code>Run()</code>日志就认定最终实际执行算法。</p>
+<p><code>Selector()</code>与<code>ReSelector()</code>还会检查通信域原始AIV_ONLY约束：如果实际引擎不是AIV，则返回不支持。</p>
+<p><a id="s14"></a></p>
+<h2>14. 如何理解配置和扩展点</h2>
+<h3>14.1 三个配置不要混淆</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>配置</th>
+<th>影响什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HCCL_USE_NEW_SELECTOR</code></td>
+<td>是否使用新选择流程</td>
+</tr>
+<tr>
+<td>通信域算子展开模式/<code>opExecuteConfig</code></td>
+<td>初始执行机制及允许的候选引擎范围</td>
+</tr>
+<tr>
+<td>通信域算法配置/<code>HCCL_ALGO</code></td>
+<td>在模型中进一步匹配或排除算法</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>FilterCmByHcclAlgo()</code>优先读取通信域算法配置；为空或查询失败时，再尝试环境变量<code>HCCL_ALGO</code>。</p>
+<p>当前解析器能识别例如：</p>
+<pre><code class="language-bash">export HCCL_USE_NEW_SELECTOR=1
+export HCCL_ALGO='allreduce:sole{meshoneshot}'
+</code></pre>
+<p>这段示例的语法含义是“AllReduce，Sole执行组织，MeshOneShot模板方案”，不是直接填入C++类名。解析器与过滤实现见<span class="source-location">alg_parse.cc<br><code class="source-path">src/common/alg_parse.cc</code></span>。</p>
+<p>但<strong>正向配置没有匹配到当前模型中的候选时，不能一概理解为严格报错</strong>：<code>ProcessMatchedResults()</code>是在存在正向匹配结果时才排除同算子未匹配项。具体结果应看配置解析日志和最终代价表。入门时可以先只开启新Selector，观察默认候选，再研究算法配置。</p>
+<h3>14.2 如果以后需要加入一个新算法，检查哪些连接点</h3>
+<p>这里解释扩展位置，不对仓库做代码修改。</p>
+<ol>
+<li><strong>执行实现</strong>：算子目录中的执行器和算法模板能够完成对应通信语义。</li>
+<li><strong>注册</strong>：执行器注册宏提供可创建对象的工厂，并登记算法目录。</li>
+<li><strong>属性</strong>：<code>REGISTER_ALG_ATTRS</code>声明正确的拓扑、数据类型及调用限制。</li>
+<li><strong>模型</strong>：执行器/模板提供适用范围内非空的<code>CalcCostCoeff()</code>，必要时提供多段<code>GetAlgNetMeta()</code>。</li>
+<li><strong>名称</strong>：与引擎、算子、执行组织和模板解析规则一致。</li>
+<li><strong>验证</strong>：既验证选择行为，也验证算法执行正确性和模型适用性。</li>
+</ol>
+<p>最常见的断点是：执行器已有实现，但继承了基类默认返回空数组的<code>CalcCostCoeff()</code>，于是新模型构建时被跳过；或者登记了执行器，漏登记属性，在代价表阶段被过滤。</p>
+<p>如果以后真的修改代码，新官方算子按<code>src/ops/&lt;op&gt;/selector</code>和<code>algorithm/{executor,template}</code>组织；试验性社区算子放在<code>experimental/ops/&lt;op&gt;/</code>。跨仓调用继续遵守HCCL/HCOMM动态加载边界。</p>
+<p><a id="s15"></a></p>
+<h2>15. 容易被名称和注释误导的地方</h2>
+<p>这些是本次对照实现确认的阅读要点，尤其适合读代码时回查。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>容易产生的理解</th>
+<th>当前实现应怎样读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>头文件写“仅支持三个算子”</td>
+<td><code>.cc</code>中的实际白名单有15种，以实现为准</td>
+</tr>
+<tr>
+<td><code>FilterCmByEngine</code>注释写<code>count=-1</code></td>
+<td>函数实际赋值0；表生成跳过小于等于0的条目</td>
+</tr>
+<tr>
+<td><code>GetEnginePriority</code>就是严格从前到后选引擎</td>
+<td>过滤阶段按集合成员资格处理，最终比较有效候选cost</td>
+</tr>
+<tr>
+<td>新流程只有公式，没有规则</td>
+<td>属性、自定义回调、拓扑/算子优先规则都能改变候选集合</td>
+</tr>
+<tr>
+<td><code>interGroupMode=MAX</code>一定使组间取最大</td>
+<td>当前计算代码组间仍执行<code>cost += groupCost</code></td>
+</tr>
+<tr>
+<td>所有数据量都读取<code>param.inputSize</code></td>
+<td>代价表使用<code>CalcCostTableDataSize()</code>，Tuner调用使用<code>inputSize</code></td>
+</tr>
+<tr>
+<td>Tuner的数据类型处理与代价表完全相同</td>
+<td>代价表有统一<code>GetOpDataType()</code>；Tuner调用点目前只显式修正AlltoAll系列</td>
+</tr>
+<tr>
+<td><code>uncalibrated</code>一定是缺实测数据</td>
+<td>也可能是拓扑不匹配、模板不支持当前rank数而返回空</td>
+</tr>
+<tr>
+<td>没有属性也能通过拓扑检查，所以能参与竞争</td>
+<td>缺属性的拓扑检查默认通过，但代价表会明确跳过无属性条目</td>
+</tr>
+<tr>
+<td>注册时没写属性就没有限制</td>
+<td>默认属性仍有效，例如默认拓扑形状、保序支持值等</td>
+</tr>
+<tr>
+<td>一次新选择失败会自动进入旧选择器</td>
+<td>该分支通过<code>CHK_RET</code>直接返回错误</td>
+</tr>
+<tr>
+<td>Tuner日志说“未修改/忽略修改”就一定恢复了旧表</td>
+<td>当前插件收到的是原表指针，调用失败分支没有备份恢复；插件实现应遵守契约</td>
+</tr>
+</tbody>
+</table></div>
+<p>缓存也要按代码读：模型上下文的标签包含执行配置，<code>AlgNetMetaRegistry</code>则是按算法名保存元数据的全局注册表。不要因此宣称所有与拓扑有关的数据都完整隔离在每个通信域中；判断跨通信域使用行为需要继续分析对应实现。</p>
+<p>本文侧重解释当前代码，不把上述差异扩展成未经测试的故障结论，也不尝试在教学文档中修复它们。</p>
+<p><a id="s16"></a></p>
+<h2>16. 日志排查和源码阅读练习</h2>
+<h3>16.1 “为什么没选中我想要的算法”</h3>
+<p>建议按下面顺序排查，每一步都回答一个具体问题。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>问题</th>
+<th>源码或日志线索</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>本次真的进入新Selector了吗？</td>
+<td><code>HCCL_USE_NEW_SELECTOR</code>、<code>[SelectorEngine] Run start</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>初始配置是否被改变？</td>
+<td><code>IsRollBackAiv</code>、外层<code>topLevelUboe</code>分支、<code>opExecuteConfig</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>算法是否登记且包含在构建中？</td>
+<td><code>REGISTER_EXEC...</code>、<code>REGISTER_ALG_ATTRS</code>、<code>GetAllAlgos</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>是否通过拓扑属性和细化匹配？</td>
+<td><code>[IsAlgoMatchTopo]</code>、<code>skipped by topo filter</code>、<code>topo match not support</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>是否拿到非空模型？</td>
+<td><code>executor not registered</code>、<code>CalcCostCoeff uncalibrated</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td>是否被拓扑优先、引擎或算法配置排除？</td>
+<td><code>topoPriority matched</code>、<code>FilterCmByHcclAlgo</code>、模型条目的count</td>
+</tr>
+<tr>
+<td>7</td>
+<td>是否通过本次算子条件？</td>
+<td><code>[InitAndFilterByAttrs] ... filtered:</code></td>
+</tr>
+<tr>
+<td>8</td>
+<td>是否被算子优先规则排除？</td>
+<td><code>opPriority matched</code>、<code>opPriority applied</code></td>
+</tr>
+<tr>
+<td>9</td>
+<td>模型是否给出更大的代价？</td>
+<td><code>[CalcAlgCost]</code>、<code>[DFX_CostTableDump]</code></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Tuner是否改变了代价？</td>
+<td>Tuner日志、<code>SelectMinCost</code>打印的表</td>
+</tr>
+<tr>
+<td>11</td>
+<td>是否并列或全部无效？</td>
+<td><code>multiple algos with same cost</code>、<code>no valid algorithm found</code></td>
+</tr>
+<tr>
+<td>12</td>
+<td>选择后是否再次回退？</td>
+<td><code>ReSelector</code>、<code>FallbackOp</code>、<code>Cached algo</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>模型日志只在模型初始化时出现；命中缓存后看不到新一轮建模日志是正常现象。<code>DFX_CostTableDump</code>在Tuner调用之前，<code>SelectMinCost</code>打印的是后续用于选择的表，两者数值可能不同。</p>
+<h3>16.2 可以直接复制的源码定位命令</h3>
+<p>这些命令只搜索代码，不执行通信程序：</p>
+<pre><code class="language-bash">cd /path/to/hccl
+
+# 找新旧切换与重选入口。
+rg -n 'IsNewSelectorEnabled|SelectorEngine::Global\(\)-&gt;Run|HcclResult ReSelector' src
+
+# 找新Selector的核心函数。
+rg -n 'SelectorEngine::(Run|InitCostModel|SelectMinCost|GetEnginePriority)' src/ops/op_common/selector
+
+# 沿着一个真实算法找注册和相关引用。
+rg -n 'AicpuAllReduceSoleMeshOneShot' src
+
+# 看属性定义与两层过滤。
+rg -n 'struct (TopoAttrs|OpAttrs|AlgAttrs)|CheckAlgoMatch.*WithReason' src/ops/op_common/selector
+
+# 找代价公式、利用率和模型接口。
+rg -n 'CalcCostCoeff|CalcAlgCost|QueryUbUtil|totalD|groupCost' src/ops/op_common/selector src/ops/all_reduce
+</code></pre>
+<p>如果有本次程序的日志文件，使用实际日志路径替换下面的占位路径：</p>
+<pre><code class="language-bash">rg -n 'SelectorEngine|CostModelManager|InitAndFilterByAttrs|CalcAlgCost|DFX_CostTableDump|Tuner|ReSelector|Fallback' /实际路径/hccl.log
+</code></pre>
+<h3>16.3 推荐断点顺序</h3>
+<p>使用带调试信息的本地构建时，可以按顺序在下列函数设断点：</p>
+<pre><code class="language-text">Selector
+SelectorEngine::Run
+CostModelManager::InitCostModel
+CostTableManager::InitAndFilterByAttrs
+CostTableManager::CalcAlgCost
+SelectorEngine::SelectMinCost
+HcclExecOp
+</code></pre>
+<p>第一次进入<code>Run()</code>先记录<code>param.opType</code>、<code>param.opExecuteConfig</code>、rank数与拓扑层数。进入表生成时查看每个模型条目的<code>count</code>。到<code>SelectMinCost()</code>时直接看<code>ct.costs</code>数组，再单步到给<code>algName</code>赋值的位置。</p>
+<p>如果模型已缓存，<code>CostModelManager::InitCostModel</code>断点可能不命中。若被快速路径提前处理，<code>Selector</code>断点也可能不命中。先用调用链解释现象，再判断程序是否异常。</p>
+<h3>16.4 三轮读代码练习</h3>
+<p>**第一轮：只看骨架。**打开<code>selector_engine.cc</code>的<code>Run()</code>，为每个调用写一句话，回答“它消费什么、产出什么”。先跳过日志和内存复制。</p>
+<p>**第二轮：跟踪一个名字。**搜索<code>AicpuAllReduceSoleMeshOneShot</code>，跟到执行器、属性、模板建模函数，再回到代价表公式。完成第12节手算。</p>
+<p>**第三轮：解释一次未入选。**挑一份真实日志，沿第16.1节找出一个候选消失的具体阶段。目标是能说出“这个算法在某函数的某条件下被排除”，或“它进入最终表但cost更大”。</p>
+<p><a id="s17"></a></p>
+<h2>17. 自测题与答案</h2>
+<p><strong>1. Selector返回<code>HCCL_SUCCESS</code>，是不是说明AllReduce已经算完了？</strong></p>
+<p>不是。表示选择阶段成功，之后还要准备资源和执行通信。</p>
+<p><strong>2. <code>CostModel</code>和<code>CostTable</code>有什么区别？</strong></p>
+<p>模型保存算法的估时系数；表保存针对当前调用得到的候选与cost。进入<code>Run()</code>后模型可缓存复用，当前表重新生成。</p>
+<p><strong>3. <code>cm.costAlgoParams[i].count=0</code>是不是把用户数据清空了？</strong></p>
+<p>不是。它让该模型算法条目不进入后续表，不修改用户数据个数。</p>
+<p><strong>4. 从<code>CCU_MS</code>进入，最终选到Aicpu算法，可能正常吗？</strong></p>
+<p>可能。候选集合允许AICPU_TS，最终按过滤后、经可选Tuner修改的cost比较，并更新执行配置。</p>
+<p><strong>5. 算法已经注册，为什么仍不出现在最终表里？</strong></p>
+<p>可能拓扑不符、模型为空、没有属性、引擎不在候选集合、算法配置排除、本次数据条件不符，或被优先规则排除。按阶段查证。</p>
+<p><strong>6. 两个算法cost相等，会选名字较小的那个吗？</strong></p>
+<p>当前循环保留表中先出现的那个，没有在这里按名字排序。</p>
+<p><strong>7. <code>cost=max(segCost,D)</code>中的D能直接加进segCost吗？</strong></p>
+<p>不能，那会改变当前模型。多段时也是先累加D，再和通信侧聚合结果取最大。</p>
+<p><strong>8. 设置<code>HCCL_USE_NEW_SELECTOR=1</code>后，为什么日志里还是没有Run？</strong></p>
+<p>先检查当前进程是否读取了配置，再检查兼容分流、零数据、单rank、缓存/快速启动、算子白名单以及算法插件快速路径。</p>
+<p><strong>9. 想看懂一个新算法，优先看哪几处？</strong></p>
+<p>执行器注册、属性注册、执行器<code>CalcCostCoeff()</code>、模板<code>CalcCostCoeff()</code>、<code>GetAlgNetMeta()</code>，最后回到公共<code>CalcAlgCost()</code>与实际执行入口。</p>
+<p><strong>10. 如何用自己的话完整描述新Selector？</strong></p>
+<p>“先取得当前调用参数和拓扑；根据注册算法建立适合该通信域与执行配置的模型；每次调用再筛选能力条件并计算代价，可选地让Tuner调整；从有效候选中选择最小值，输出算法名和执行配置，再交给后续资源与执行流程。”</p>
+<hr />
+<p>本文通过本地源码静态阅读核对流程和接口，并对算例做了独立数值计算。没有运行NPU通信程序，因此不包含上板正确性结论或实测性能数据。</p>
+</article><footer class="article-footer"><a href="hccl-selector.html">← 返回图解指南</a><p>Linkforfuture · 本页为静态HTML，源码引用以仓库相对路径提供。</p></footer></main></body></html>
