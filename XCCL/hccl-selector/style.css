@@ -18,3 +18,120 @@
 @media print{.mobile-nav{display:none}}
 
 @media(max-width:600px){h1>span{display:block}}
+
+/* Reading sizes stay comfortable on both desktop and mobile. */
+body { font-size: 18px; line-height: 1.85; }
+.hero-description { font-size: 20px; }
+.section-heading p, .demo-bottom p, .takeaway p, .role-row p,
+.plain-card p, .note, .step-copy p, .model-card > p,
+.attribute-pair p, .selection-result p, .two-notes p,
+.code-explanation > p, .debug-grid p, .continue-card p,
+.detail-content, .reference-header p, .reference-article {
+  font-size: 18px;
+  line-height: 1.85;
+}
+.caption, .model-card .caption, .code-explanation .caption,
+.hero-meta, .experiment-label, .allowed, .legend,
+.calculator-result > span, .calculator-result p,
+.cost-stats small, .range-endpoints, .bar-label,
+.article-footer, .article-footer code, .source-path {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.mini-label, .eyebrow, .sidebar-label, .sidebar-foot,
+.rank span, .role-icon, .role-row h3 small, .model-badge,
+.model-transform small, .coefficient-grid small,
+.name-anatomy small, .registration-map > span,
+.registration-map b, .candidate-row small, .candidate-status,
+.code-path, .copy-button {
+  font-size: 13px;
+}
+.sidebar nav a, .sidebar nav a span, .header-actions,
+.mobile-nav a, .button, .button.small, .hero-actions .button,
+.text-link, .segmented button, .pill, .mini-flow,
+.controls label, select, .slider-label, .coefficient-grid span,
+.model-transform, .model-transform > b, .data-row,
+.candidate-header, .candidate-row, .candidate-row strong,
+.reading-detail summary, .code-tabs button, .debug-grid code,
+.reference-article table {
+  font-size: 16px;
+}
+.role-row > code, .code-walk pre, .reference-article pre {
+  font-size: 15px;
+  line-height: 1.9;
+}
+.role-row h3, .plain-card h3, .attribute-pair h3,
+.step-copy h3, .code-explanation h3, .debug-grid h3 {
+  font-size: 20px;
+}
+.name-anatomy b, .calculator .panel-heading h3 { font-size: 17px; }
+.panel-heading h2 { font-size: 22px; }
+.actor text { font-size: 16px; }
+.seq-step text { font-size: 15px; }
+.seq-step .small-svg { font-size: 13px; }
+#sequence-svg, .reference-article .diagram-scroll svg { min-width: 780px; }
+.pill { white-space: normal; }
+.panel-heading, .panel-toolbar, .hero-meta { flex-wrap: wrap; }
+.step-console { align-items: flex-start; }
+.role-row { grid-template-columns: 48px minmax(0, 1fr); }
+.role-row > code { grid-column: 2; }
+.data-row { flex-wrap: wrap; }
+.model-layout { grid-template-columns: minmax(0, 1fr) 210px minmax(0, 1fr); }
+.registration-map { flex-wrap: wrap; }
+.candidate-row small { overflow-wrap: anywhere; }
+.formula { flex-wrap: wrap; }
+.comparison-chart { min-width: 560px; }
+.detail-content:has(.comparison-chart) { overflow-x: auto; }
+
+@media (max-width: 1150px) {
+  .page-shell { gap: 30px; grid-template-columns: 205px minmax(0, 1fr); }
+  .model-layout { grid-template-columns: minmax(0, 1fr); }
+  .model-transform { padding: 20px; }
+  .model-transform .big-arrow { transform: rotate(90deg); margin: 8px; }
+  .step-console { flex-wrap: wrap; }
+  .step-buttons { margin-left: auto; }
+}
+@media (max-width: 850px) {
+  .page-shell { display: block; }
+  .compare-grid, .attribute-pair { grid-template-columns: minmax(0, 1fr); }
+  .mobile-nav a { font-size: 14px; }
+}
+@media (max-width: 600px) {
+  body { font-size: 17px; }
+  .hero-description { font-size: 18px; }
+  .section-heading p, .demo-bottom p, .takeaway p, .role-row p,
+  .plain-card p, .note, .step-copy p, .model-card > p,
+  .attribute-pair p, .selection-result p, .two-notes p,
+  .code-explanation > p, .debug-grid p, .continue-card p,
+  .detail-content, .reference-header p, .reference-article {
+    font-size: 17px;
+  }
+  .hero-meta { gap: 8px 16px; }
+  .rank span { font-size: 11px; letter-spacing: 0; }
+  .role-row { grid-template-columns: 36px minmax(0, 1fr); }
+  .role-icon { font-size: 12px; width: 34px; height: 34px; }
+  .role-row h3 small { display: block; margin: 5px 0 0; }
+  .role-row > code, .code-walk pre, .reference-article pre { font-size: 14px; }
+  .code-tabs { flex-wrap: wrap; }
+  .code-tabs button { flex: 1 1 40%; padding: 9px; }
+  .candidate-header { display: none; }
+  .candidate-row { grid-template-columns: 1fr 1fr; gap: 10px 16px; padding: 18px 10px; }
+  .candidate-row.winner { padding-left: 10px; }
+  .candidate-row > :nth-child(2)::before { content: '属性：'; }
+  .candidate-row > :nth-child(3)::before { content: 'cost：'; }
+  .cost-stats { grid-template-columns: 1fr; gap: 13px; }
+  .cost-stats > div { flex-direction: row; justify-content: space-between; align-items: center; gap: 12px; }
+  .cost-stats strong { font-size: 18px; }
+  .legend { flex-direction: column; gap: 6px; }
+  .formula code { font-size: 19px; }
+  .name-anatomy > span { flex: 1 1 40%; }
+  .name-anatomy b { font-size: 15px; }
+  .header-actions { font-size: 14px; }
+  .registration-map { flex-direction: column; }
+  .registration-map > span, .registration-map b { font-size: 15px; }
+  .article-footer code { font-size: 12px; }
+}
+@media print {
+  #sequence-svg, .reference-article .diagram-scroll svg { min-width: 0; }
+  .comparison-chart { min-width: 0; }
+}

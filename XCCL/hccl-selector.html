@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="用时序图、候选筛选实验和代价计算器，从零读懂HCCL新Selector及其AllReduce代码。">
   <title>图解HCCL新Selector · Linkforfuture</title>
-  <link rel="stylesheet" href="hccl-selector/style.css">
+  <link rel="stylesheet" href="hccl-selector/style.css?v=readability-2">
   <script src="hccl-selector/app.js" defer></script>
 </head>
 <body>
@@ -36,7 +36,7 @@
     <g data-seq="0" class="seq-step current"><rect class="step-band" x="12" y="75" width="756" height="37" rx="6"/><text x="126" y="99">① 检查AIV_ONLY特殊条件</text><path d="M105 82H117V103H105"/></g>
     <g data-seq="1" class="seq-step"><text x="405" y="138">② 首次初始化Tuner</text><path d="M105 148H705"/></g>
     <g data-seq="2" class="seq-step"><text x="205" y="178">③ 查询当前执行配置的模型</text><path d="M105 188H305"/></g>
-    <g data-seq="3" class="seq-step"><rect class="build-box" x="236" y="202" width="294" height="48" rx="8"/><text x="383" y="222">④ 缓存未命中：构建、保存、过滤</text><text class="small-svg" x="383" y="240">拓扑 → 系数 → 优先规则 → 配置</text></g>
+    <g data-seq="3" class="seq-step"><rect class="build-box" x="236" y="202" width="294" height="48" rx="8"/><text x="383" y="222">④ 构建、保存与过滤模型</text><text class="small-svg" x="383" y="240">拓扑 → 系数 → 优先规则 → 配置</text></g>
     <g data-seq="4" class="seq-step"><text x="205" y="278">⑤ 返回CostModel</text><path class="return-line" d="M305 286H105"/></g>
     <g data-seq="5" class="seq-step"><text x="305" y="313">⑥ 按本次调用过滤、算cost、应用优先规则</text><path d="M105 323H505"/></g>
     <g data-seq="6" class="seq-step"><text x="305" y="350">⑦ 返回CostTable</text><path class="return-line" d="M505 360H105"/></g>
