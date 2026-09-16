@@ -1,0 +1,1306 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="HCCL Aicpu AllGather Parallel 图解：把数据切成两片，一片先 Mesh 后 NHR、一片先 NHR 后 Mesh，逐阶段数清每个 rank 持有多少、发给谁、发多少字节。">
+<title>AllGather Parallel · 两片数据，两条路 · Linkforfuture</title>
+<style>
+:root{
+  --bg:#f8f9fc; --paper:#fff; --ink:#222d43; --muted:#627087; --line:#e2e6ef;
+  --purple:#6255ce; --purple-bg:#eeecfc; --purple-line:#c7bff0;
+  --teal:#117b70; --teal-bg:#e7f5f1; --teal-line:#b5dcd4;
+  --amber:#a96a17; --amber-bg:#fbf1e0; --amber-line:#e6cfa6;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  --radius:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.85;font-size:17px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--purple);text-decoration:none}
+a:hover{text-decoration:underline}
+p{margin:0 0 16px}
+h1,h2,h3{line-height:1.4;letter-spacing:-.02em}
+h2,h3{margin:0}
+code,pre{font-family:var(--mono)}
+p code,li code,td code{background:#eef0f6;border-radius:4px;padding:2px 5px;font-size:.86em;overflow-wrap:anywhere}
+svg{max-width:100%;height:auto;display:block}
+:focus-visible{outline:3px solid #7769e4;outline-offset:3px}
+
+/* ---------- 顶栏 ---------- */
+.site-header{height:70px;padding:0 40px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:20}
+.brand{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:750;color:var(--ink);white-space:nowrap}
+.brand:hover{text-decoration:none}
+.brand-mark{background:var(--ink);color:#fff;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;font-size:15px}
+.brand-sub{font-size:13px;color:var(--muted);font-weight:400;padding-left:10px;border-left:1px solid var(--line)}
+.header-actions{display:flex;gap:22px;font-size:13px}
+
+/* ---------- 骨架 ---------- */
+.page-shell{max-width:1400px;margin:auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:60px;padding:0 44px}
+.sidebar{position:sticky;top:110px;align-self:start;padding:6px 0 30px}
+.sidebar-label{font-size:10px;letter-spacing:.14em;font-weight:750;color:var(--muted)}
+.sidebar-title{font-size:21px;font-weight:700;margin:14px 0 26px;line-height:1.5}
+.sidebar nav{display:flex;flex-direction:column;gap:5px}
+.sidebar nav a{font-size:13px;padding:9px 12px;display:flex;gap:11px;border-radius:7px;color:var(--muted)}
+.sidebar nav a:hover{text-decoration:none;background:#f1f3f8}
+.sidebar nav a span{font-family:var(--mono);font-size:11px;color:#919aab;padding-top:1px}
+.sidebar nav a.active{background:var(--purple-bg);color:var(--purple);font-weight:650}
+.sidebar nav a.active span{color:var(--purple)}
+.sidebar-foot{border-top:1px solid var(--line);margin-top:30px;padding-top:18px;font-size:11px;color:var(--muted);line-height:2}
+.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-right:6px}
+main{min-width:0;max-width:1000px;padding-bottom:60px}
+
+/* ---------- 章节 ---------- */
+.chapter{padding:58px 0;border-bottom:1px solid var(--line);scroll-margin-top:24px}
+.chapter:last-of-type{border-bottom:0}
+.hero{padding-top:52px}
+.eyebrow{font-size:10px;letter-spacing:.14em;font-weight:750;color:var(--purple);margin-bottom:20px}
+h1{font-size:clamp(32px,3.6vw,52px);font-weight:780;margin:0 0 20px;line-height:1.25;letter-spacing:-.04em}
+h1>span{color:var(--purple)}
+.hero-description{color:var(--muted);font-size:18px;line-height:1.9;margin-bottom:24px}
+.hero-meta{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.hero-meta span::before{content:"✓";margin-right:6px;color:var(--teal)}
+.section-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:26px}
+.section-number{font-family:var(--mono);color:var(--purple);font-size:14px;padding-top:6px}
+.section-heading h2{font-size:27px;font-weight:720;margin-bottom:8px}
+.section-heading p{color:var(--muted);font-size:15px;margin:0}
+.lead{font-size:17px;line-height:1.9;margin-bottom:20px}
+.lead b{color:var(--ink)}
+
+/* ---------- 图 ---------- */
+.figure{border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px 16px 12px;margin:22px 0}
+.figure .dg{width:100%;min-width:560px}
+.diagram-scroll{overflow-x:auto}
+.figcap{color:var(--muted);font-size:12.5px;line-height:1.8;margin:10px 2px 0}
+.figcap b{color:var(--ink);font-weight:600}
+
+/* ---------- 要点框 ---------- */
+.keypoints{background:#f2f4fa;border:1px solid var(--line);border-left:3px solid var(--purple);border-radius:12px;padding:16px 22px;margin:22px 0}
+.keypoints .kp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;letter-spacing:.02em}
+.keypoints ul{margin:0;padding-left:19px}
+.keypoints li{margin:6px 0;font-size:15px;color:#3c4a5f}
+.keypoints li::marker{color:var(--purple)}
+.keypoints code{background:#e6e9f3}
+.note{font-size:13.5px;color:var(--muted);line-height:1.9;margin:18px 0 0}
+.note b{color:var(--ink)}
+
+/* ---------- 表格 ---------- */
+.table-scroll{overflow-x:auto;margin:22px 0}
+table{width:100%;border-collapse:collapse;background:#fff;font-size:14px;min-width:520px}
+th,td{border:1px solid var(--line);padding:10px 13px;text-align:left;vertical-align:top}
+th{background:#f1f0f8;font-weight:650;font-size:13px}
+tbody tr:nth-child(even){background:#fbfcfe}
+td.num,th.num{font-family:var(--mono);font-size:13px;white-space:nowrap}
+.tag-a,.tag-b{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap}
+.tag-a{background:var(--purple-bg);color:var(--purple)}
+.tag-b{background:var(--amber-bg);color:var(--amber)}
+.tag-mesh,.tag-nhr{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;white-space:nowrap}
+.tag-mesh{background:var(--purple-bg);color:var(--purple)}
+.tag-nhr{background:var(--teal-bg);color:var(--teal)}
+
+/* ---------- 公式 ---------- */
+.formula{border:1px solid var(--purple-line);background:#f2f0fc;border-radius:12px;padding:20px 24px;margin:22px 0;
+  font-family:var(--mono);font-size:15px;line-height:2.1;overflow-x:auto}
+.formula .flabel{font-family:inherit;font-size:11px;color:var(--muted);letter-spacing:.1em;font-weight:700;display:block;margin-bottom:8px}
+.formula .row{white-space:nowrap}
+.formula .hi{color:var(--purple);font-weight:700}
+
+/* ---------- 交互面板 ---------- */
+.panel{border:1px solid var(--line);border-radius:var(--radius);background:#fff;padding:24px;margin:24px 0}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.panel-head h3{font-size:18px}
+.mini-label{font-size:10px;letter-spacing:.13em;font-weight:750;color:var(--muted)}
+.pill{font-size:11px;color:var(--muted);border:1px solid var(--line);background:#fafbfe;padding:4px 10px;border-radius:6px;white-space:nowrap}
+.controls{display:grid;grid-template-columns:130px 130px minmax(0,1fr);gap:22px;align-items:end;margin-bottom:22px}
+.controls label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:8px}
+select{font:inherit;font-size:14px;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--purple);cursor:pointer;min-height:24px}
+.rho-head{display:flex;justify-content:space-between;align-items:baseline}
+.rho-head output{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--purple)}
+.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
+.readout>div{display:flex;flex-direction:column;gap:3px}
+.readout small{font-size:11.5px;color:var(--muted)}
+.readout strong{font-family:var(--mono);font-size:20px}
+.readout .c-mesh{color:var(--purple)} .readout .c-nhr{color:var(--teal)} .readout .c-sum{color:var(--ink)}
+.verdict{background:#f4f2fc;border-radius:10px;padding:16px 20px;margin-top:20px;font-size:14.5px;color:#3c4a5f}
+.verdict b{color:var(--purple)}
+
+/* ---------- 代码 ---------- */
+.codemap{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;margin:22px 0}
+.codemap .cm-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);align-items:baseline}
+.codemap .cm-row:last-child{border-bottom:0}
+.codemap .cm-path{font-family:var(--mono);font-size:12.5px;color:#4c429c;overflow-wrap:anywhere}
+.codemap .cm-what{font-size:12.5px;color:var(--muted);text-align:right;white-space:nowrap}
+pre{background:#202b40;color:#e1e7f2;padding:18px 20px;border-radius:12px;overflow:auto;font-size:13px;line-height:1.9;margin:22px 0}
+
+/* ---------- 细节折叠 ---------- */
+details{border:1px solid var(--line);border-radius:12px;background:#fff;margin:14px 0}
+summary{cursor:pointer;padding:15px 20px;font-size:14.5px;font-weight:650}
+details[open] summary{border-bottom:1px solid var(--line)}
+details .dc{padding:18px 22px;font-size:14.5px;color:#3c4a5f}
+details .dc p:last-child,details .dc ul:last-child{margin-bottom:0}
+details .dc ul{padding-left:20px}
+
+/* ---------- 页脚 ---------- */
+.article-footer{padding:34px 0 50px;font-size:12px;color:var(--muted)}
+.article-footer .strong{color:var(--ink);font-weight:650;font-size:13px}
+.article-footer code{font-size:11px;overflow-wrap:anywhere}
+
+.mobile-nav{display:none}
+@media(max-width:1120px){
+  .page-shell{grid-template-columns:190px minmax(0,1fr);gap:34px;padding:0 30px}
+  .site-header{padding:0 30px}
+  .sidebar-title{font-size:18px}
+}
+@media(max-width:880px){
+  .sidebar{display:none}
+  .page-shell{display:block;padding:0 26px}
+  .mobile-nav{display:flex;overflow-x:auto;gap:8px;padding:10px 26px;background:#fff;border-bottom:1px solid var(--line);
+    position:sticky;top:70px;z-index:19;scrollbar-width:thin}
+  .mobile-nav a{white-space:nowrap;font-size:12px;padding:5px 9px;color:var(--muted);border-radius:6px}
+  .mobile-nav a.active{background:var(--purple-bg);color:var(--purple)}
+  html{scroll-padding-top:140px}
+  .chapter{padding:42px 0}
+}
+@media(max-width:640px){
+  body{font-size:16px}
+  .site-header{height:60px;padding:0 17px;gap:10px}
+  .brand{font-size:14px;gap:8px}
+  .brand-mark{width:25px;height:25px;font-size:13px}
+  .brand-sub{display:none}
+  .header-actions{font-size:11.5px;gap:13px}
+  .header-actions a:first-child{display:none}
+  .page-shell{padding:0 17px}
+  .mobile-nav{top:60px;padding:8px 17px}
+  html{scroll-padding-top:126px}
+  h1{font-size:31px}
+  .hero-description{font-size:16px}
+  .section-heading h2{font-size:22px}
+  .controls{grid-template-columns:1fr 1fr;gap:14px}
+  .controls .rho-wrap{grid-column:1/-1}
+  .readout{grid-template-columns:1fr;gap:10px}
+  .codemap .cm-row{grid-template-columns:1fr;gap:4px}
+  .codemap .cm-what{text-align:left}
+  .figure{padding:12px 10px 8px}
+  .figure .dg{min-width:640px}
+  table{font-size:12.5px;min-width:480px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+@media print{
+  .site-header,.sidebar,.mobile-nav,.controls{display:none!important}
+  .page-shell{display:block;padding:0;max-width:none}
+  .chapter{padding:22px 0}
+  .diagram-scroll{overflow:visible}
+  .figure .dg{min-width:0}
+  .chapter{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<a class="brand-skip" href="#main" style="position:fixed;top:-100px;left:20px;background:#222d43;color:#fff;padding:10px 20px;z-index:100;border-radius:8px">跳到正文</a>
+<header class="site-header">
+  <a class="brand" href="../index.html"><span class="brand-mark">L</span>Linkforfuture<span class="brand-sub">/ 学习笔记</span></a>
+  <div class="header-actions">
+    <a href="study.html">XCCL笔记</a>
+    <a href="hccl-selector.html">Selector图解</a>
+  </div>
+</header>
+<nav class="mobile-nav" aria-label="章节导航">
+  <a href="#s1">01 为什么分两路</a><a href="#s2">02 二维拓扑</a><a href="#s3">03 数据切分</a>
+  <a href="#s4">04 两阶段</a><a href="#s5">05 实例走查</a><a href="#s6">06 流量账本</a>
+  <a href="#s7">07 NHR 内部</a><a href="#s8">08 数据落位</a><a href="#s9">09 时间模型</a><a href="#s10">10 代码地图</a>
+</nav>
+<div class="page-shell">
+  <aside class="sidebar">
+    <div class="sidebar-label">HCCL / ALGORITHM ATLAS</div>
+    <p class="sidebar-title">AllGather<br>Parallel 图解</p>
+    <nav aria-label="章节导航">
+      <a href="#s1"><span>01</span>为什么分两路</a>
+      <a href="#s2"><span>02</span>二维拓扑</a>
+      <a href="#s3"><span>03</span>数据切分</a>
+      <a href="#s4"><span>04</span>两阶段数据流</a>
+      <a href="#s5"><span>05</span>实例走查</a>
+      <a href="#s6"><span>06</span>流量账本</a>
+      <a href="#s7"><span>07</span>NHR 内部</a>
+      <a href="#s8"><span>08</span>数据落在哪里</a>
+      <a href="#s9"><span>09</span>时间模型</a>
+      <a href="#s10"><span>10</span>代码地图与自测</a>
+    </nav>
+    <div class="sidebar-foot">
+      <span class="status-dot"></span>基于本地源码快照<br>
+      行号对应 <code>master</code> 分支<br>
+      整理日期 2026-09-16
+    </div>
+  </aside>
+
+  <main id="main">
+
+  <!-- ================= 01 ================= -->
+  <section class="chapter hero" id="s1">
+    <div class="eyebrow">01 / START WITH THE PICTURE</div>
+    <h1>两片数据，<br><span>两条路同时走</span></h1>
+    <p class="hero-description">AllGather 要把每个 rank 的数据送到所有 rank。当机器天然分成两个维度时，HCCL 的 Parallel 执行器会把数据切成两片，一片先 Mesh 后 NHR，一片先 NHR 后 Mesh，让两条链路同时忙起来。</p>
+    <p class="hero-description">这篇文章不满足于"知道它并行"，而是把账算清楚：<b>每个阶段，每个 rank 手上握着多少数据、发给谁、发多少字节</b>。</p>
+    <div class="hero-meta"><span>7 张图解，全部 SVG 手绘</span><span>流量公式可自行复算</span><span>附可拖动的切分比例模型</span></div>
+
+    <h3 style="margin:34px 0 12px;font-size:19px">先明确 AllGather 要什么</h3>
+    <p class="lead">设共有 <code>P</code> 个 rank，每个 rank 的输入是 <code>D</code> 字节。AllGather 结束后，<b>每个 rank 的 output 里都完整地排着全部 P 个 rank 的数据，共 P·D 字节</b>。</p>
+    <p class="lead">注意这个语义里没有"归约"——数据只是被复制、搬运、排好位置。所以 AllGather 的代价几乎全部由<b>搬运次数</b>和<b>走哪条链路</b>决定。</p>
+
+    <h3 style="margin:30px 0 12px;font-size:19px">为什么"并行"能省时间</h3>
+    <p class="lead">如果只用一条链路（比如全走 Ring，或者全走 NHR），那么每个 rank 至少要承担 <code>(P−1)·D</code> 的发送量，而且这些字节要挤在同一条链路上排队。</p>
+    <p class="lead">但真实的机器往往有两级连接：<b>机器内部的高速互联</b>，和<b>机器之间的网络</b>。它们是两条物理上独立的链路，可以同时传输。Parallel 执行器的想法很直接：</p>
+    <div class="keypoints">
+      <div class="kp-title">一句话理解 Parallel</div>
+      <ul>
+        <li>把本次数据切成 <span class="tag-a">A 片</span> 和 <span class="tag-b">B 片</span>。</li>
+        <li><span class="tag-a">A 片</span>先在第一个维度上收齐，再整块沿着第二个维度传播。</li>
+        <li><span class="tag-b">B 片</span>反过来：先在第二个维度上收齐，再整块沿着第一个维度传播。</li>
+        <li>两个方向的两步<b>在时间上是并行发起的</b>，所以两条链路同时在传数据。</li>
+      </ul>
+    </div>
+    <p class="note"><b>代价是什么？</b>总发送量并不会变少——仍然是每 rank <code>(P−1)·D</code>。Parallel 换来的不是"传得更少"，而是"把流量摊到两条链路上，让总耗时由较长的那条决定，而不是两者相加"。这个问题在<a href="#s9">第 09 节</a>还会再算一次。</p>
+  </section>
+
+  <!-- ================= 02 ================= -->
+  <section class="chapter" id="s2">
+    <div class="section-heading"><span class="section-number">02</span><div>
+      <h2>把 P 个 rank 摆成一个 M×N 的网格</h2>
+      <p>并行执行器的两个维度，来自拓扑的两层结构。</p>
+    </div></div>
+
+    <p class="lead">Parallel 执行器用一个二维视角描述通信域，把参与通信的 rank 排成网格：</p>
+    <div class="keypoints">
+      <div class="kp-title">两个维度的定义</div>
+      <ul>
+        <li><b>Level 0，大小 <code>M</code></b>：同一<b>行</b>内的 rank 之间做 <span class="tag-mesh">Mesh</span>（全连接，互相直接读）。</li>
+        <li><b>Level 1，大小 <code>N</code></b>：同一<b>列</b>内的 rank 之间做 <span class="tag-nhr">NHR</span>（逐轮递归减半，多跳转发）。</li>
+        <li>总 rank 数 <code>P = M × N</code>，rank 编号 <code>r = j × M + i</code>，其中 <code>i</code> 是 Level 0 内的编号（列号），<code>j</code> 是 Level 1 内的编号（行号）。</li>
+      </ul>
+    </div>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 700 420" role="img" aria-labelledby="t-topo d-topo">
+        <title id="t-topo">二维拓扑：M 列 N 行的 rank 网格</title>
+        <desc id="d-topo">M 等于 3、N 等于 2 的 rank 网格。行方向用 Mesh 全连接，列方向用 NHR 逐轮传播，rank 编号 r 等于 j 乘 M 加 i。</desc>
+        <defs>
+          <marker id="mk-mesh" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#6255ce"/>
+          </marker>
+          <marker id="mk-nhr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#117b70"/>
+          </marker>
+        </defs>
+
+        <text x="386" y="42" text-anchor="middle" font-size="14" font-weight="650" fill="#6255ce">Level 0 · Mesh（行内全连接）</text>
+
+        <g font-size="12" fill="#627087" text-anchor="middle">
+          <text x="226" y="80">i = 0</text><text x="386" y="80">i = 1</text><text x="546" y="80">i = 2</text>
+        </g>
+        <g font-size="12" fill="#627087" text-anchor="end">
+          <text x="152" y="141">j = 0</text><text x="152" y="281">j = 1</text>
+        </g>
+
+        <g>
+          <!-- row 0 -->
+          <rect x="170" y="96" width="112" height="80" rx="11" fill="#f4f3fb" stroke="#ded9f6"/>
+          <rect x="330" y="96" width="112" height="80" rx="11" fill="#f4f3fb" stroke="#ded9f6"/>
+          <rect x="490" y="96" width="112" height="80" rx="11" fill="#f4f3fb" stroke="#ded9f6"/>
+          <!-- row 1 -->
+          <rect x="170" y="236" width="112" height="80" rx="11" fill="#f6f8fc" stroke="#e2e6ef"/>
+          <rect x="330" y="236" width="112" height="80" rx="11" fill="#f6f8fc" stroke="#e2e6ef"/>
+          <rect x="490" y="236" width="112" height="80" rx="11" fill="#f6f8fc" stroke="#e2e6ef"/>
+        </g>
+
+        <g text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,monospace">
+          <text x="226" y="140" font-size="20" font-weight="700" fill="#222d43">r0</text>
+          <text x="226" y="160" font-size="10.5" fill="#627087">(i=0, j=0)</text>
+          <text x="386" y="140" font-size="20" font-weight="700" fill="#222d43">r1</text>
+          <text x="386" y="160" font-size="10.5" fill="#627087">(i=1, j=0)</text>
+          <text x="546" y="140" font-size="20" font-weight="700" fill="#222d43">r2</text>
+          <text x="546" y="160" font-size="10.5" fill="#627087">(i=2, j=0)</text>
+          <text x="226" y="280" font-size="20" font-weight="700" fill="#222d43">r3</text>
+          <text x="226" y="300" font-size="10.5" fill="#627087">(i=0, j=1)</text>
+          <text x="386" y="280" font-size="20" font-weight="700" fill="#222d43">r4</text>
+          <text x="386" y="300" font-size="10.5" fill="#627087">(i=1, j=1)</text>
+          <text x="546" y="280" font-size="20" font-weight="700" fill="#222d43">r5</text>
+          <text x="546" y="300" font-size="10.5" fill="#627087">(i=2, j=1)</text>
+        </g>
+
+        <g stroke="#6255ce" stroke-width="2" marker-start="url(#mk-mesh)" marker-end="url(#mk-mesh)">
+          <path d="M282 136 H330"/><path d="M442 136 H490"/>
+          <path d="M282 276 H330"/><path d="M442 276 H490"/>
+        </g>
+        <g stroke="#117b70" stroke-width="2" stroke-dasharray="6 5" marker-start="url(#mk-nhr)" marker-end="url(#mk-nhr)">
+          <path d="M226 176 V236"/><path d="M386 176 V236"/><path d="M546 176 V236"/>
+        </g>
+
+        <text transform="rotate(-90 64 206)" x="64" y="206" text-anchor="middle" font-size="14" font-weight="650" fill="#117b70">Level 1 · NHR（列内）</text>
+
+        <g font-size="13" fill="#627087" text-anchor="middle">
+          <text x="386" y="358">M = Level 0 大小（行内 rank 数）= 3　·　N = Level 1 大小（列内 rank 数）= 2　·　P = M × N = 6</text>
+        </g>
+        <text x="386" y="392" text-anchor="middle" font-size="14.5" fill="#222d43">
+          rank 编号 <tspan font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-weight="700" fill="#6255ce">r = j × M + i</tspan>
+        </text>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 1 · 二维拓扑。</b>行方向（Level 0）用 Mesh，每两个 rank 之间双向直达；列方向（Level 1）用 NHR，靠多轮转发。图中取 M=3、N=2 便于看清编号规则，<code>i</code> 变化让 rank 号 +1，<code>j</code> 变化让 rank 号 +M。</p>
+    </div>
+
+    <p class="note"><b>为什么要关心"谁是低位"？</b>因为 <code>r = j × M + i</code> 这个约定决定了同一个 Level 0 行里装的是哪几个 rank。在实际硬件上，这通常对应"同一台机器内的几张卡"或者"同一个超节点内的几个 rank"。<b>哪条链路快，就应该让哪一维承担更多的数据</b>——这正是<a href="#s3">下一节</a>要切分的理由。</p>
+  </section>
+
+  <!-- ================= 03 ================= -->
+  <section class="chapter" id="s3">
+    <div class="section-heading"><span class="section-number">03</span><div>
+      <h2>把本次数据切成 A、B 两片</h2>
+      <p>切分比例是一个可配置的量，它决定两条链路各背多少流量。</p>
+    </div></div>
+
+    <p class="lead">执行器把本 rank 本次要处理的数据切成两段：</p>
+    <div class="formula">
+      <span class="flabel">片与长度</span>
+      <div class="row">X<sub>j,i</sub> = <span class="hi">A<sub>j,i</sub></span> ‖ <span class="hi">B<sub>j,i</sub></span> ,　　a + b = d</div>
+      <div class="row">a = (1 − ρ) · d　　（<span class="hi">A 片</span>长度）</div>
+      <div class="row">b = ρ · d　　　　（<span class="hi">B 片</span>长度）</div>
+    </div>
+    <p class="lead">其中 <code>ρ</code> 就是配置项 <code>multipleDimensionSplitRatio</code>，<b>它表示 B 片的比例</b>，也就是代码注释里的"数据片 1"。</p>
+    <p class="lead">这里有两个容易混淆的量，先分清楚：</p>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>符号</th><th>含义</th><th>代码对应</th></tr></thead>
+      <tbody>
+        <tr><td class="num"><code>D</code></td><td><b>单个 rank 的数据块大小</b>，也是 output 里分给每个 rank 的槽位长度</td><td><code>dataSize_ = dataCount_ × dataTypeSize_</code></td></tr>
+        <tr><td class="num"><code>d</code></td><td><b>本次循环处理的数据量</b>。D 很大时会被切成若干块依次处理</td><td><code>currCount × dataTypeSize_</code></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note"><b>别把 D 当成"整个 tensor"。</b>它是<b>一个</b> rank 的数据量。全部 P 个 rank 的数据加起来是 <code>P·D</code>，那也正是每个 rank 最终 output 的大小。</p>
+    <p class="note"><b>ρ 从哪里来？</b>取值优先级是：通信域配置 <code>HCCL_CONFIG_TYPE_MULTIPLE_DIMENSION_SPLIT_RATIO</code> ＞ 环境变量 <code>HCCL_ALG_MULTIPLE_DIMENSION_SPLIT_RATIO</code> ＞ 默认 0.5。此外还有一个"比例来源"开关 <code>multipleDimensionSplitRatioSource_</code>，默认取 <code>BUILTIN_FORMULA</code>：此时执行器<b>并不直接采用配置里的数字</b>，而是先用内置公式算出"先 Mesh 后 Clos"那一片的比例，再取补得到 <code>ρ</code>。</p>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 700 250" role="img" aria-labelledby="t-split d-split">
+        <title id="t-split">本 rank 数据切分为 A 片与 B 片</title>
+        <desc id="d-split">一个 rank 本次的 d 字节数据被切成 A 片和 B 片，A 片走 Mesh 再走 NHR，B 片走 NHR 再走 Mesh。</desc>
+        <text x="70" y="38" font-size="14" font-weight="650" fill="#222d43">本 rank 本次数据 X（共 d 字节）</text>
+
+        <rect x="70" y="60" width="280" height="64" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.5"/>
+        <rect x="350" y="60" width="280" height="64" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.5"/>
+        <rect x="70" y="60" width="560" height="64" fill="none" stroke="#c7bff0" stroke-width="1.5"/>
+
+        <g text-anchor="middle">
+          <text x="210" y="90" font-size="17" font-weight="700" fill="#6255ce">A 片</text>
+          <text x="210" y="111" font-size="12.5" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#6255ce">a = (1 − ρ) · d</text>
+          <text x="490" y="90" font-size="17" font-weight="700" fill="#a96a17">B 片</text>
+          <text x="490" y="111" font-size="12.5" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#a96a17">b = ρ · d</text>
+        </g>
+
+        <g stroke="#8593a8" stroke-width="1">
+          <path d="M70 140 H630"/><path d="M70 135 V145"/><path d="M630 135 V145"/>
+        </g>
+        <text x="350" y="160" text-anchor="middle" font-size="12.5" fill="#627087">d = a + b</text>
+
+        <g font-size="13.5">
+          <text x="70" y="196" fill="#6255ce" font-weight="650">A 片路径：</text>
+          <text x="168" y="196" fill="#3c4a5f">① Mesh 收齐本行 → ② NHR 扩散到全列</text>
+          <text x="70" y="226" fill="#a96a17" font-weight="650">B 片路径：</text>
+          <text x="168" y="226" fill="#3c4a5f">① NHR 收齐本列 → ② Mesh 扩散到全行</text>
+        </g>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 2 · 数据切分。</b>两片的<b>长度</b>由 ρ 决定，两片的<b>路径</b>是固定互反的。ρ=0.5 是图中画出的均分情形，实际取值远不止 0.5 一种。</p>
+    </div>
+
+    <div class="note">
+      <p><b>三个容易忽略的实现细节：</b></p>
+      <ul style="padding-left:20px;margin:10px 0 0">
+        <li><b>元素取整。</b><code>a</code>、<code>b</code> 最终要落到"多少个元素"上：<code>currCountPart0</code> 由 <code>比例 × currCount</code> <b>截断取整</b>得到，<code>currCountPart1</code> 直接取余下的部分。所以本文的公式是忽略取整的连续近似，<b>真正参与通信的是 <code>currCountPart0</code> / <code>currCountPart1</code> 乘以数据类型字节数</b>。</li>
+        <li><b>非末次循环的 4K 对齐。</b>只要不是本轮循环的最后一块，两片都会各自向下对齐到 <code>4096</code> 字节（且只在片本身 ≥ 4K 时才对齐）。</li>
+        <li><b>对齐会"滚存"。</b>因为是对齐取整，非末次循环里 <code>part0 + part1</code> 会略小于 <code>currCount</code>，这个差额会累积到末次循环一起处理。<b>所以严格等于 <code>(P−1)·D</code> 的是跨循环的累计值，而不是单次循环。</b></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= 04 ================= -->
+  <section class="chapter" id="s4">
+    <div class="section-heading"><span class="section-number">04</span><div>
+      <h2>两个阶段：每条路各走两步</h2>
+      <p>阶段内两项操作并行，阶段之间有同步。</p>
+    </div></div>
+
+    <p class="lead">整个执行过程被切成两个阶段。每个阶段里，两个维度上的操作<b>同时发起</b>：</p>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 760 510" role="img" aria-labelledby="t-flow d-flow">
+        <title id="t-flow">AllGather Parallel 的两个阶段</title>
+        <desc id="d-flow">A 片在第一阶段沿 Level0 用 Mesh 收齐本行，B 片沿 Level1 用 NHR 收齐本列；同步之后，A 片整块沿 Level1 用 NHR 传播，B 片整块沿 Level0 用 Mesh 传播，最终每个 rank 持有全部数据。</desc>
+        <defs>
+          <marker id="mk-flow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8593a8"/>
+          </marker>
+        </defs>
+        <g stroke="#8593a8" stroke-width="1.7" fill="none" marker-end="url(#mk-flow)">
+          <path d="M330 80 L215 112"/><path d="M430 80 L545 112"/>
+          <path d="M205 202 V244"/><path d="M555 202 V244"/>
+          <path d="M205 294 V324"/><path d="M555 294 V324"/>
+          <path d="M205 414 V434"/><path d="M555 414 V434"/>
+        </g>
+
+        <rect x="250" y="26" width="260" height="54" rx="11" fill="#fff" stroke="#c7cbd6" stroke-width="1.5"/>
+        <text x="380" y="59" text-anchor="middle" font-size="14.5" font-weight="650" fill="#222d43">本 rank 本次数据 X = A ‖ B</text>
+
+        <rect x="60" y="118" width="290" height="84" rx="11" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.5"/>
+        <text x="205" y="146" text-anchor="middle" font-size="14" font-weight="700" fill="#6255ce">阶段 1 · Intra0</text>
+        <text x="205" y="169" text-anchor="middle" font-size="12.5" fill="#3c4a5f">A 片沿 Level 0 收齐本行</text>
+        <text x="205" y="190" text-anchor="middle" font-size="13" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#6255ce">持有 M · a</text>
+
+        <rect x="410" y="118" width="290" height="84" rx="11" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.5"/>
+        <text x="555" y="146" text-anchor="middle" font-size="14" font-weight="700" fill="#a96a17">阶段 1 · Inter1</text>
+        <text x="555" y="169" text-anchor="middle" font-size="12.5" fill="#3c4a5f">B 片沿 Level 1 收齐本列</text>
+        <text x="555" y="190" text-anchor="middle" font-size="13" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#a96a17">持有 N · b</text>
+
+        <rect x="60" y="250" width="640" height="44" rx="9" fill="#f1f3f8" stroke="#d5dbe6" stroke-dasharray="6 4"/>
+        <text x="380" y="278" text-anchor="middle" font-size="13.5" font-weight="650" fill="#4a5a70">阶段间同步：两项都完成后，才启动阶段 2</text>
+
+        <rect x="60" y="330" width="290" height="84" rx="11" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.5"/>
+        <text x="205" y="358" text-anchor="middle" font-size="14" font-weight="700" fill="#6255ce">阶段 2 · Inter0</text>
+        <text x="205" y="381" text-anchor="middle" font-size="12.5" fill="#3c4a5f">整个 M·a 沿 Level 1 传播</text>
+        <text x="205" y="402" text-anchor="middle" font-size="13" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#6255ce">持有 M · N · a</text>
+
+        <rect x="410" y="330" width="290" height="84" rx="11" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.5"/>
+        <text x="555" y="358" text-anchor="middle" font-size="14" font-weight="700" fill="#a96a17">阶段 2 · Intra1</text>
+        <text x="555" y="381" text-anchor="middle" font-size="12.5" fill="#3c4a5f">整个 N·b 沿 Level 0 传播</text>
+        <text x="555" y="402" text-anchor="middle" font-size="13" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#a96a17">持有 M · N · b</text>
+
+        <rect x="60" y="440" width="640" height="48" rx="9" fill="#e7f5f1" stroke="#b5dcd4" stroke-width="1.5"/>
+        <text x="380" y="470" text-anchor="middle" font-size="14" font-weight="650" fill="#117b70">阶段 2 结束：本 rank 持有全部 P = M×N 个 rank 的 A 片与 B 片</text>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 3 · 两阶段数据流。</b>注意 A 片和 B 片在两个阶段里走的是<b>同一条链路的不同方向</b>：A 片先在 Mesh 上收齐、再在 NHR 上扩散；B 片反过来。</p>
+    </div>
+
+    <h3 style="margin:30px 0 10px;font-size:18px">为什么必须是这个顺序</h3>
+    <p class="lead">关键在于<b>阶段 2 传播的数据量会变大</b>。第一阶段结束时，A 片从 <code>a</code> 膨胀成 <code>M·a</code>（本行所有 rank 的 A 片），B 片从 <code>b</code> 膨胀成 <code>N·b</code>（本列所有 rank 的 B 片）。</p>
+    <p class="lead">第二阶段要做的，是把这两个"已经变大的块"沿着<b>另一个维度</b>整体扩散出去。实现上用 <code>repeatNum = M</code> 或 <code>repeatNum = N</code> 来描述这些数据片——它们在 output 里可以是<b>跨步分布</b>的，不要求先打包成一块连续内存。</p>
+
+    <h3 style="margin:30px 0 10px;font-size:18px">"同步"同步的是什么</h3>
+    <p class="lead">阶段之间的同步<b>不是网络 barrier</b>，而是<b>线程间的通知</b>。两个模板各自跑在独立的线程上（一个负责 intra/Mesh，一个负责 inter/NHR），主线程按顺序提交两项任务后由它们并行执行，再通过一对 notify record / wait 与两个模板线程对齐；跨 rank 的同步则由模板内部的通信自己完成。</p>
+    <p class="lead">每个阶段的内外结构因此是：<code>前置同步 → 提交两项任务 → 后置同步</code>。阶段 1 先提交 A 片（Mesh）再提交 B 片（NHR）；阶段 2 先提交 A 片（NHR）再提交 B 片（Mesh）。<b>提交顺序不等于执行顺序</b>——真正决定谁先跑完的是两条链路的实际速度。</p>
+
+    <h3 style="margin:30px 0 10px;font-size:18px">每个阶段，谁持有多少</h3>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>阶段</th><th>调用</th><th>通信范围</th><th>rank (j,i) 处理前持有</th><th>完成后持有</th></tr></thead>
+      <tbody>
+        <tr>
+          <td rowspan="2">阶段 1</td>
+          <td><b>Intra0</b><br><span class="tag-mesh">Mesh</span></td>
+          <td>固定 j，遍历 i</td>
+          <td>自己的 A<sub>j,i</sub></td>
+          <td>本行所有 A<sub>j,*</sub>，共 <code>M·a</code></td>
+        </tr>
+        <tr>
+          <td><b>Inter1</b><br><span class="tag-nhr">NHR</span></td>
+          <td>固定 i，遍历 j</td>
+          <td>自己的 B<sub>j,i</sub></td>
+          <td>本列所有 B<sub>*,i</sub>，共 <code>N·b</code></td>
+        </tr>
+        <tr>
+          <td rowspan="2">阶段 2</td>
+          <td><b>Inter0</b><br><span class="tag-nhr">NHR</span></td>
+          <td>固定 j 的整行，沿 i 之外的方向</td>
+          <td>阶段 1 收齐的整行 A，共 <code>M·a</code></td>
+          <td>所有 rank 的 A，共 <code>M·N·a</code></td>
+        </tr>
+        <tr>
+          <td><b>Intra1</b><br><span class="tag-mesh">Mesh</span></td>
+          <td>固定 i 的整列，沿 j 之外的方向</td>
+          <td>阶段 1 收齐的整列 B，共 <code>N·b</code></td>
+          <td>所有 rank 的 B，共 <code>M·N·b</code></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <p class="note"><b>循环处理：</b>上面的 <code>d</code>、<code>a</code>、<code>b</code> 都是"一次循环"的量。外层是一个 <code>while (processedCount &lt; dataCount_)</code> 循环：先按 <code>ceil(dataCount_ / maxCountPerLoop)</code> 算出总轮数，每轮再按剩余轮数均分当前剩余量，并用 <code>maxCountPerLoop</code> 封顶。其中 <code>maxCountPerLoop = min(scratchMemBlockSize, UB_MAX_DATA_SIZE) / dataTypeSize_</code>——即缓冲区能容纳多少元素就一轮传多少；若开了对称内存，则直接一次传完。</p>
+    <p class="note">每一块都完整走一遍上面的两个阶段。所以整个 tensor 处理完，每个 rank 的<b>累计发送量是 <code>(P−1)·D</code></b>——这一点和用哪种切分比例无关。</p>
+  </section>
+
+  <!-- ================= 05 ================= -->
+  <section class="chapter" id="s5">
+    <div class="section-heading"><span class="section-number">05</span><div>
+      <h2>实例走查：M=N=2 时，r0 看到了什么</h2>
+      <p>四个 rank，两种颜色，三个瞬间。</p>
+    </div></div>
+
+    <p class="lead">取最简单的 <code>M = 2, N = 2</code>（4 个 rank），<code>ρ = 0.5</code>（两片等长）。我们只盯着 <b>r0</b> 看。</p>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 520 340" role="img" aria-labelledby="t-view d-view">
+        <title id="t-view">r0 的本行与本列</title>
+        <desc id="d-view">2x2 网格中，r0 所在的行是 r0 与 r1，做 Mesh；r0 所在的列是 r0 与 r2，做 NHR。</desc>
+        <defs>
+          <marker id="mk-view-mesh" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#6255ce"/>
+          </marker>
+          <marker id="mk-view-nhr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#117b70"/>
+          </marker>
+        </defs>
+
+        <text x="242" y="50" text-anchor="middle" font-size="13.5" font-weight="650" fill="#6255ce">本行 · Level 0 · Mesh</text>
+        <text x="175" y="318" text-anchor="middle" font-size="13.5" font-weight="650" fill="#117b70">本列 · Level 1 · NHR</text>
+
+        <rect x="106" y="70" width="272" height="104" rx="13" fill="none" stroke="#6255ce" stroke-width="1.6" stroke-dasharray="7 5"/>
+        <rect x="106" y="70" width="138" height="220" rx="13" fill="none" stroke="#117b70" stroke-width="1.6" stroke-dasharray="7 5"/>
+
+        <rect x="120" y="84" width="110" height="76" rx="10" fill="#eeecfc" stroke="#6255ce" stroke-width="2"/>
+        <rect x="254" y="84" width="110" height="76" rx="10" fill="#f6f8fc" stroke="#e2e6ef" stroke-width="1.4"/>
+        <rect x="120" y="200" width="110" height="76" rx="10" fill="#f6f8fc" stroke="#e2e6ef" stroke-width="1.4"/>
+        <rect x="254" y="200" width="110" height="76" rx="10" fill="#f6f8fc" stroke="#e2e6ef" stroke-width="1.4"/>
+
+        <g text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,monospace">
+          <text x="175" y="118" font-size="20" font-weight="700" fill="#6255ce">r0</text>
+          <text x="175" y="138" font-size="10.5" fill="#627087">(i=0, j=0)</text>
+          <text x="309" y="118" font-size="20" font-weight="700" fill="#222d43">r1</text>
+          <text x="309" y="138" font-size="10.5" fill="#627087">(i=1, j=0)</text>
+          <text x="175" y="234" font-size="20" font-weight="700" fill="#222d43">r2</text>
+          <text x="175" y="254" font-size="10.5" fill="#627087">(i=0, j=1)</text>
+          <text x="309" y="234" font-size="20" font-weight="700" fill="#222d43">r3</text>
+          <text x="309" y="254" font-size="10.5" fill="#627087">(i=1, j=1)</text>
+        </g>
+
+        <g stroke="#6255ce" stroke-width="2" marker-start="url(#mk-view-mesh)" marker-end="url(#mk-view-mesh)">
+          <path d="M230 122 H254"/><path d="M230 238 H254"/>
+        </g>
+        <g stroke="#117b70" stroke-width="2" stroke-dasharray="6 5" marker-start="url(#mk-view-nhr)" marker-end="url(#mk-view-nhr)">
+          <path d="M175 160 V200"/><path d="M309 160 V200"/>
+        </g>
+
+        <g font-size="12" fill="#3c4a5f">
+          <text x="396" y="140" font-weight="650" fill="#6255ce">A 片</text>
+          <text x="396" y="160">来自本行</text>
+          <text x="396" y="234" font-weight="650" fill="#a96a17">B 片</text>
+          <text x="396" y="254">来自本列</text>
+        </g>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 4 · r0 的邻居视角。</b>两个虚线框分别是 r0 参与的两个维度。r0 位于它们的交点上——这就是"两片数据各走一条路"的物理含义。</p>
+    </div>
+
+    <p class="lead">r0 的 output 可以看成 <b>4 个槽位</b>，每个槽位对应一个来源 rank，槽位里再分成 A 段和 B 段。下面是这三个瞬间。为了看清"哪些是新到的"，<span style="color:#6255ce;font-weight:650">紫色 = 原本就有的</span>，<span style="color:#117b70;font-weight:650">绿色 = 本阶段新收到</span>，灰色虚线 = 还是空的。</p>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 800 450" role="img" aria-labelledby="t-slots d-slots">
+        <title id="t-slots">r0 的输出槽位在三个阶段中的演化</title>
+        <desc id="d-slots">初始时 r0 只有自己的 A0 和 B0；阶段 1 结束后通过 Mesh 拿到 A1、通过 NHR 拿到 B2；阶段 2 结束后与 r2 交换 A 片、与 r1 交换 B 片，四个槽位全部填满。</desc>
+
+        <g font-size="12" fill="#627087" text-anchor="middle">
+          <text x="229" y="44">源 rank 0</text><text x="379" y="44">源 rank 1</text>
+          <text x="529" y="44">源 rank 2</text><text x="679" y="44">源 rank 3</text>
+        </g>
+
+        <g font-size="13.5" font-weight="650" text-anchor="end">
+          <text x="150" y="108" fill="#222d43">① 初始</text>
+          <text x="150" y="234" fill="#222d43">② 阶段 1 结束</text>
+          <text x="150" y="378" fill="#222d43">③ 阶段 2 结束</text>
+        </g>
+
+        <!-- ===== stage 1 : y=70 ===== -->
+        <g>
+          <rect x="160" y="70" width="138" height="30" rx="6" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.4"/>
+          <rect x="160" y="106" width="138" height="30" rx="6" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.4"/>
+          <g fill="none" stroke="#ccd3de" stroke-width="1.4" stroke-dasharray="5 4">
+            <rect x="310" y="70" width="138" height="30" rx="6"/><rect x="310" y="106" width="138" height="30" rx="6"/>
+            <rect x="460" y="70" width="138" height="30" rx="6"/><rect x="460" y="106" width="138" height="30" rx="6"/>
+            <rect x="610" y="70" width="138" height="30" rx="6"/><rect x="610" y="106" width="138" height="30" rx="6"/>
+          </g>
+        </g>
+
+        <!-- ===== stage 2 : y=196 ===== -->
+        <g>
+          <rect x="160" y="196" width="138" height="30" rx="6" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.4"/>
+          <rect x="160" y="232" width="138" height="30" rx="6" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.4"/>
+          <rect x="310" y="196" width="138" height="30" rx="6" fill="#e7f5f1" stroke="#117b70" stroke-width="1.4"/>
+          <rect x="310" y="232" width="138" height="30" rx="6" fill="none" stroke="#ccd3de" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="460" y="196" width="138" height="30" rx="6" fill="none" stroke="#ccd3de" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="460" y="232" width="138" height="30" rx="6" fill="#e7f5f1" stroke="#117b70" stroke-width="1.4"/>
+          <rect x="610" y="196" width="138" height="30" rx="6" fill="none" stroke="#ccd3de" stroke-width="1.4" stroke-dasharray="5 4"/>
+          <rect x="610" y="232" width="138" height="30" rx="6" fill="none" stroke="#ccd3de" stroke-width="1.4" stroke-dasharray="5 4"/>
+        </g>
+
+        <g font-size="12.5" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" text-anchor="middle" font-weight="650">
+          <text x="229" y="90" fill="#6255ce">A0</text><text x="229" y="126" fill="#a96a17">B0</text>
+          <text x="229" y="216" fill="#6255ce">A0</text><text x="229" y="252" fill="#a96a17">B0</text>
+          <text x="379" y="216" fill="#117b70">A1</text>
+          <text x="529" y="252" fill="#117b70">B2</text>
+        </g>
+
+        <g font-size="12">
+          <text x="160" y="290" fill="#4a5a70" font-weight="650">阶段 2 · 与 r2 交换（本列 NHR）：</text>
+          <text x="365" y="290" fill="#4a5a70">送出 A0、A1　→　换回 A2、A3</text>
+          <text x="160" y="314" fill="#4a5a70" font-weight="650">阶段 2 · 与 r1 交换（本行 Mesh）：</text>
+          <text x="365" y="314" fill="#4a5a70">送出 B0、B2　→　换回 B1、B3</text>
+        </g>
+
+        <!-- ===== stage 3 : y=340 ===== -->
+        <g>
+          <rect x="160" y="340" width="138" height="30" rx="6" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.4"/>
+          <rect x="160" y="376" width="138" height="30" rx="6" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.4"/>
+          <rect x="310" y="340" width="138" height="30" rx="6" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.4"/>
+          <rect x="310" y="376" width="138" height="30" rx="6" fill="#e7f5f1" stroke="#117b70" stroke-width="1.4"/>
+          <rect x="460" y="340" width="138" height="30" rx="6" fill="#e7f5f1" stroke="#117b70" stroke-width="1.4"/>
+          <rect x="460" y="376" width="138" height="30" rx="6" fill="#fbf1e0" stroke="#e6cfa6" stroke-width="1.4"/>
+          <rect x="610" y="340" width="138" height="30" rx="6" fill="#e7f5f1" stroke="#117b70" stroke-width="1.4"/>
+          <rect x="610" y="376" width="138" height="30" rx="6" fill="#e7f5f1" stroke="#117b70" stroke-width="1.4"/>
+        </g>
+        <g font-size="12.5" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" text-anchor="middle" font-weight="650">
+          <text x="229" y="360" fill="#6255ce">A0</text><text x="229" y="396" fill="#a96a17">B0</text>
+          <text x="379" y="360" fill="#6255ce">A1</text><text x="379" y="396" fill="#117b70">B1</text>
+          <text x="529" y="360" fill="#117b70">A2</text><text x="529" y="396" fill="#a96a17">B2</text>
+          <text x="679" y="360" fill="#117b70">A3</text><text x="679" y="396" fill="#117b70">B3</text>
+        </g>
+        <text x="160" y="432" font-size="12.5" fill="#627087">最终：每个槽位都装齐了自己和另外 3 个 rank 的两片数据 —— AllGather 完成。</text>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 5 · r0 的输出槽位演化。</b>注意阶段 1 结束时槽位的填充是"<b>查缺补漏</b>"式的：A 只出现在本行的槽位里，B 只出现在本列的槽位里。阶段 2 才把两种颜色补齐。</p>
+    </div>
+
+    <div class="keypoints">
+      <div class="kp-title">从这张图能读出什么</div>
+      <ul>
+        <li>阶段 1 是<b>两种互不相干的局部收集</b>：A 在行内横着收，B 在列内竖着收。</li>
+        <li>阶段 2 是<b>两个整块的跨维扩散</b>：r0 手上的 <code>A0+A1</code>（<code>M·a</code>）整体沿列发出去，<code>B0+B2</code>（<code>N·b</code>）整体沿行发出去。</li>
+        <li>数据<b>直接落到最终位置</b>，不需要先拼成连续大块再搬运。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= 06 ================= -->
+  <section class="chapter" id="s6">
+    <div class="section-heading"><span class="section-number">06</span><div>
+      <h2>流量账本：每条链路各发多少</h2>
+      <p>把四个阶段的发送量加起来，看看总账是不是守恒。</p>
+    </div></div>
+
+    <p class="lead">下面统计的是<b>有效载荷的单向发送量</b>：每个 rank 发出的字节数。接收量与之相等。这里包含转发的数据，但<b>不计</b>协议头、通知消息和本地拷贝。</p>
+
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>阶段</th><th>操作</th><th>链路</th><th class="num">每 rank 发送量</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>A 片收齐本行</td><td><span class="tag-mesh">Mesh</span></td><td class="num">(M − 1) · a</td></tr>
+        <tr><td>1</td><td>B 片收齐本列</td><td><span class="tag-nhr">NHR</span></td><td class="num">(N − 1) · b</td></tr>
+        <tr><td>2</td><td>A 片扩散到全列</td><td><span class="tag-nhr">NHR</span></td><td class="num">(N − 1) · M · a</td></tr>
+        <tr><td>2</td><td>B 片扩散到全行</td><td><span class="tag-mesh">Mesh</span></td><td class="num">(M − 1) · N · b</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="formula">
+      <span class="flabel">按链路归并</span>
+      <div class="row">V<sub>Mesh</sub> = (M − 1)(a + N·b) = (M − 1)·[ 1 + (N − 1)·ρ ]·d</div>
+      <div class="row">V<sub>NHR</sub>　= (N − 1)(b + M·a) = (N − 1)·[ M − (M − 1)·ρ ]·d</div>
+      <div class="row" style="margin-top:10px">V<sub>send</sub> = V<sub>Mesh</sub> + V<sub>NHR</sub> = <span class="hi">(M·N − 1)·d = (P − 1)·d</span></div>
+    </div>
+
+    <p class="lead">最后一行很有意思：<b>两条链路的流量加起来恒等于 <code>(P−1)·d</code>，与 ρ 完全无关</b>。也就是说，调切分比例<b>不会减少总搬运量</b>，它只是把同样的字节在两条链路之间<b>挪来挪去</b>。</p>
+    <p class="lead">方向也很直观：<b>ρ 越大（B 片越多），Mesh 的流量越大、NHR 的流量越小</b>。因为 B 片是"先在 Level 1 收齐、再由 Level 0 扩散"的那一片。</p>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><span class="mini-label">交互实验 · 本节流量模型</span><h3>拖动 ρ，看流量怎么搬家</h3></div>
+        <span class="pill">单位：d（本次数据量）</span>
+      </div>
+      <div class="controls">
+        <label>M（Level 0 大小）
+          <select id="tf-m">
+            <option value="2">2</option><option value="4">4</option>
+            <option value="8">8</option><option value="16">16</option>
+          </select>
+        </label>
+        <label>N（Level 1 大小）
+          <select id="tf-n">
+            <option value="2">2</option><option value="4">4</option>
+            <option value="8">8</option><option value="16">16</option>
+          </select>
+        </label>
+        <label class="rho-wrap">
+          <span class="rho-head"><span>ρ · B 片比例</span><output id="tf-rho-out">0.50</output></span>
+          <input type="range" id="tf-rho" min="0" max="1" step="0.01" value="0.5" aria-label="B 片比例 ρ">
+        </label>
+      </div>
+
+      <div class="diagram-scroll">
+      <svg viewBox="0 0 700 120" role="img" aria-labelledby="t-bar d-bar" style="width:100%;min-width:520px">
+        <title id="t-bar">两条链路的发送量堆叠条</title>
+        <desc id="d-bar">横条按比例显示 Mesh 链路与 NHR 链路各自承担多少发送量，两者之和恒定为 P 减 1 倍的 d。</desc>
+        <g font-size="13" fill="#4a5a70" text-anchor="end">
+          <text x="110" y="40" font-weight="650" fill="#6255ce">Mesh</text>
+          <text x="110" y="84" font-weight="650" fill="#117b70">NHR</text>
+        </g>
+        <rect x="120" y="20" width="480" height="30" rx="5" fill="#f1f3f8"/>
+        <rect x="120" y="64" width="480" height="30" rx="5" fill="#f1f3f8"/>
+        <rect id="tf-bar-mesh" x="120" y="20" width="240" height="30" rx="5" fill="#6255ce"/>
+        <rect id="tf-bar-nhr" x="120" y="64" width="240" height="30" rx="5" fill="#117b70"/>
+        <g font-size="13.5" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" fill="#222d43">
+          <text id="tf-mesh" x="612" y="40">1.50 d</text>
+          <text id="tf-nhr" x="612" y="84">1.50 d</text>
+        </g>
+        <text x="120" y="112" font-size="11.5" fill="#8593a8">0</text>
+        <text x="600" y="112" font-size="11.5" fill="#8593a8" text-anchor="end">两条合计恒为 (P − 1) · d</text>
+      </svg>
+      </div>
+
+      <div class="readout">
+        <div><small>P = M × N</small><strong class="c-sum" id="tf-p">4</strong></div>
+        <div><small>Mesh 流量 V<sub>Mesh</sub></small><strong class="c-mesh" id="tf-mesh-num">1.50 d</strong></div>
+        <div><small>NHR 流量 V<sub>NHR</sub></small><strong class="c-nhr" id="tf-nhr-num">1.50 d</strong></div>
+      </div>
+
+      <div class="diagram-scroll" style="margin-top:22px">
+      <svg viewBox="0 0 700 250" role="img" aria-labelledby="t-curve d-curve" style="width:100%;min-width:520px">
+        <title id="t-curve">Mesh 与 NHR 流量随 ρ 的变化曲线</title>
+        <desc id="d-curve">两条曲线随 ρ 线性变化，一升一降，在流量均衡点相交；交点位置随 M、N 变化。</desc>
+        <g stroke="#e2e6ef" stroke-width="1">
+          <path d="M70 30 H620"/><path d="M70 70 H620"/><path d="M70 110 H620"/><path d="M70 150 H620"/><path d="M70 190 H620"/>
+        </g>
+        <path d="M70 30 V190 H620" fill="none" stroke="#c3cad6" stroke-width="1.4"/>
+        <polyline id="tf-line-mesh" points="" fill="none" stroke="#6255ce" stroke-width="2.6"/>
+        <polyline id="tf-line-nhr" points="" fill="none" stroke="#117b70" stroke-width="2.6"/>
+        <g id="tf-cross-g">
+          <path id="tf-cross-guide" d="" fill="none" stroke="#8593a8" stroke-width="1.2" stroke-dasharray="5 4"/>
+          <circle id="tf-cross" cx="345" cy="110" r="5.5" fill="#fff" stroke="#a96a17" stroke-width="2.2"/>
+        </g>
+        <text id="tf-cross-label" x="345" y="94" font-size="11.5" fill="#a96a17" font-weight="650" text-anchor="middle">均衡点 ρ* = 0.50</text>
+        <g font-size="11.5" fill="#8593a8">
+          <text x="70" y="212" text-anchor="middle">ρ = 0</text>
+          <text x="345" y="212" text-anchor="middle">0.5</text>
+          <text x="620" y="212" text-anchor="middle">ρ = 1</text>
+          <text x="62" y="34" text-anchor="end">(P−1)·d</text>
+          <text x="62" y="194" text-anchor="end">0</text>
+        </g>
+        <text x="70" y="240" font-size="12" fill="#6255ce" font-weight="650">Mesh</text>
+        <text x="112" y="240" font-size="12" fill="#627087">随 ρ 上升</text>
+        <text x="212" y="240" font-size="12" fill="#117b70" font-weight="650">NHR</text>
+        <text x="250" y="240" font-size="12" fill="#627087">随 ρ 下降</text>
+      </svg>
+      </div>
+
+      <div class="verdict" id="tf-verdict">
+        <b>ρ = 0.50：</b>两条链路的发送量相等。
+      </div>
+      <p class="caption" style="color:#627087;font-size:12px;margin:12px 0 0">图为本节推导出的解析模型，<b>不是实测性能</b>。它只回答"发多少字节"，不含带宽、轮次同步与竞争开销。</p>
+    </div>
+
+    <div class="keypoints">
+      <div class="kp-title">一个可以自己推的结论</div>
+      <ul>
+        <li>令 <code>V_Mesh = V_NHR</code>，解得流量均衡点 <code>ρ* = (M·N − 2M + 1) / [ 2(M − 1)(N − 1) ]</code>。</li>
+        <li>只有当 <code>M = N</code> 时，<code>ρ*</code> 才等于 0.5。M ≠ N 时，均衡点会明显偏移。</li>
+        <li>例如 <code>M=2, N=8</code> 时 <code>ρ* ≈ 0.93</code>；<code>M=8, N=2</code> 时 <code>ρ* ≈ 0.07</code>。上面拖动滑块就能看到交点移动。</li>
+      </ul>
+    </div>
+    <p class="note"><b>但要小心：流量相等 ≠ 时间相等。</b>Mesh 和 NHR 的带宽、启动开销、轮次同步成本都不一样。要让两条链路<b>同时做完</b>，ρ 还要按两条链路的实际能力反比偏移。这才是切分比例值得做成配置项的原因——见<a href="#s9">第 09 节</a>。</p>
+  </section>
+
+  <!-- ================= 07 ================= -->
+  <section class="chapter" id="s7">
+    <div class="section-heading"><span class="section-number">07</span><div>
+      <h2>NHR 内部：一轮到底发几份</h2>
+      <p>把 Level 1 那条路拆开，看它怎么用 log₂N 轮把数据铺开。</p>
+    </div></div>
+
+    <p class="lead">Level 1 的传播由 NHR 完成。设一次 NHR 有 <code>N</code> 个参与 rank，算法内编号为 <code>j</code>，则轮数为 <code>K = ⌈log₂N⌉</code>。第 <code>s</code> 轮（<code>s = 0 … K−1</code>）：</p>
+
+    <div class="formula">
+      <span class="flabel">第 s 轮</span>
+      <div class="row">Δ<sub>s</sub> = 2<sup>K−1−s</sup>　　　　（本轮通信距离，逐轮减半）</div>
+      <div class="row">sendTo = (j + Δ<sub>s</sub>) mod N　　　recvFrom = (j − Δ<sub>s</sub> + N) mod N</div>
+      <div class="row" style="margin-top:10px">q<sub>s</sub> = ⌊ (N − 1 + Δ<sub>s</sub>) / (2·Δ<sub>s</sub>) ⌋　　（本轮发送的数据份数）</div>
+      <div class="row">发送的源 rank 依次为：j, j − 2Δ<sub>s</sub>, j − 4Δ<sub>s</sub>, … (mod N)</div>
+    </div>
+
+    <p class="lead">注意最后一行的含义：<b>发出去的份数里，既有本 rank 自己的原始数据，也有前面轮次已经收集到的数据</b>。这正是 NHR 能在一轮里把信息量翻倍的原因。累计有 <code>Σq_s = N − 1</code>，不多不少刚好收齐。</p>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 760 340" role="img" aria-labelledby="t-nhr d-nhr">
+        <title id="t-nhr">以 rank 0 为例，NHR 两轮把持有量翻满</title>
+        <desc id="d-nhr">N 等于 4 时 rank 0 初始只有第 0 份；第一轮与 rank 2 交换后持有第 0、2 份；第二轮送出两份给 rank 1、从 rank 3 收到两份，最终持有全部 4 份。</desc>
+        <defs>
+          <marker id="mk-nhr-step" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#117b70"/>
+          </marker>
+        </defs>
+
+        <g font-size="12.5" fill="#627087" text-anchor="middle" font-weight="650">
+          <text x="95" y="52">初始</text><text x="380" y="52">轮 0 之后</text><text x="665" y="52">轮 1 之后（收齐）</text>
+        </g>
+
+        <g>
+          <rect x="20" y="66" width="150" height="150" rx="12" fill="#f6f8fc" stroke="#e2e6ef" stroke-width="1.4"/>
+          <rect x="305" y="66" width="150" height="150" rx="12" fill="#f6f8fc" stroke="#e2e6ef" stroke-width="1.4"/>
+          <rect x="590" y="66" width="150" height="150" rx="12" fill="#e7f5f1" stroke="#b5dcd4" stroke-width="1.6"/>
+        </g>
+
+        <g text-anchor="middle">
+          <text x="95" y="92" font-size="14" font-weight="700" fill="#222d43">rank 0</text>
+          <text x="380" y="92" font-size="14" font-weight="700" fill="#222d43">rank 0</text>
+          <text x="665" y="92" font-size="14" font-weight="700" fill="#222d43">rank 0</text>
+        </g>
+
+        <!-- chips: x offsets inside each panel -->
+        <!-- panel1 chips at 20+13=33 -->
+        <g>
+          <rect x="33" y="106" width="28" height="26" rx="5" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.3"/>
+          <rect x="65" y="106" width="28" height="26" rx="5" fill="none" stroke="#ccd3de" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <rect x="97" y="106" width="28" height="26" rx="5" fill="none" stroke="#ccd3de" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <rect x="129" y="106" width="28" height="26" rx="5" fill="none" stroke="#ccd3de" stroke-width="1.2" stroke-dasharray="4 3"/>
+        </g>
+        <g>
+          <rect x="318" y="106" width="28" height="26" rx="5" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.3"/>
+          <rect x="350" y="106" width="28" height="26" rx="5" fill="none" stroke="#ccd3de" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <rect x="382" y="106" width="28" height="26" rx="5" fill="#e7f5f1" stroke="#117b70" stroke-width="1.3"/>
+          <rect x="414" y="106" width="28" height="26" rx="5" fill="none" stroke="#ccd3de" stroke-width="1.2" stroke-dasharray="4 3"/>
+        </g>
+        <g>
+          <rect x="603" y="106" width="28" height="26" rx="5" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.3"/>
+          <rect x="635" y="106" width="28" height="26" rx="5" fill="#e7f5f1" stroke="#117b70" stroke-width="1.3"/>
+          <rect x="667" y="106" width="28" height="26" rx="5" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.3"/>
+          <rect x="699" y="106" width="28" height="26" rx="5" fill="#e7f5f1" stroke="#117b70" stroke-width="1.3"/>
+        </g>
+
+        <g font-size="12" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" text-anchor="middle" fill="#3c4a5f">
+          <text x="47" y="124">{0}</text><text x="79" y="124">{1}</text><text x="111" y="124">{2}</text><text x="143" y="124">{3}</text>
+          <text x="332" y="124">{0}</text><text x="364" y="124">{1}</text><text x="396" y="124">{2}</text><text x="428" y="124">{3}</text>
+          <text x="617" y="124">{0}</text><text x="649" y="124">{1}</text><text x="681" y="124">{2}</text><text x="713" y="124">{3}</text>
+        </g>
+
+        <g font-size="12.5" fill="#627087" text-anchor="middle">
+          <text x="95" y="166">持有 1 份</text>
+          <text x="380" y="166">持有 2 份</text>
+          <text x="665" y="166">持有 4 份</text>
+        </g>
+        <g font-size="11" fill="#8593a8" text-anchor="middle">
+          <text x="95" y="192">每一列 = 一个源 rank 的数据</text>
+          <text x="380" y="192">Δ = 2，与 rank 2 互换</text>
+          <text x="665" y="192">Δ = 1，与 rank 1 / 3 互换</text>
+        </g>
+
+        <g stroke="#117b70" stroke-width="1.8" fill="none" marker-end="url(#mk-nhr-step)">
+          <path d="M170 141 H300"/><path d="M455 141 H585"/>
+        </g>
+        <g font-size="11.5" fill="#117b70">
+          <text x="235" y="240" text-anchor="middle" font-weight="650">q₀ = 1</text>
+          <text x="235" y="258" text-anchor="middle">送 {0} → rank 2</text>
+          <text x="235" y="276" text-anchor="middle">收 {2} ← rank 2</text>
+          <text x="520" y="240" text-anchor="middle" font-weight="650">q₁ = 2</text>
+          <text x="520" y="258" text-anchor="middle">送 {0,2} → rank 1</text>
+          <text x="520" y="276" text-anchor="middle">收 {1,3} ← rank 3</text>
+        </g>
+
+        <g font-size="11.5" fill="#8593a8">
+          <rect x="20" y="300" width="13" height="13" rx="3" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.2"/>
+          <text x="40" y="311">本 rank 原有</text>
+          <rect x="150" y="300" width="13" height="13" rx="3" fill="#e7f5f1" stroke="#117b70" stroke-width="1.2"/>
+          <text x="170" y="311">本轮新收到</text>
+          <rect x="290" y="300" width="13" height="13" rx="3" fill="none" stroke="#ccd3de" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text x="310" y="311">尚未持有</text>
+          <text x="440" y="311">每一轮所有 rank 同时交换，这里只画 rank 0 的视角</text>
+        </g>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 6 · NHR 的轮次（N = 4）。</b>两轮之后持有量从 1 份涨到 4 份。每轮发送的份数 <code>q_s</code> 递增，累计恰好 <code>N−1 = 3</code> 份。</p>
+    </div>
+
+    <p class="lead">把 NHR 当成一个整体看，它在<b>阶段 1</b> 传递的是 B 片（每份 <code>b</code> 字节），在<b>阶段 2</b> 传递的是整行 A（每份 <code>M·a</code> 字节）。代入上面的 <code>q_s</code>：</p>
+
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>NHR 轮次</th><th class="num">通信距离 Δ</th><th class="num">发送份数 q</th><th class="num">阶段 1 的 B 片发送量</th><th class="num">阶段 2 的 A 片发送量</th></tr></thead>
+      <tbody>
+        <tr><td>轮 0</td><td class="num">2</td><td class="num">1</td><td class="num">b</td><td class="num">M·a</td></tr>
+        <tr><td>轮 1</td><td class="num">1</td><td class="num">2</td><td class="num">2b</td><td class="num">2·M·a</td></tr>
+        <tr><td><b>合计</b></td><td class="num">—</td><td class="num">3</td><td class="num"><b>3b = (N−1)·b</b></td><td class="num"><b>3·M·a = (N−1)·M·a</b></td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <p class="note">合计一列正好对上<a href="#s6">第 06 节</a>流量表里 NHR 的两项。这也说明：<b>NHR 的"多跳转发"并没有额外放大有效载荷</b>——每个 rank 发送的总份数就是 <code>N−1</code>，转发的部分早已计入其中。N 不是 2 的幂时，公式同样适用，只是最后一轮的 <code>Δ</code> 会落在非 2 的幂距离上。</p>
+  </section>
+
+  <!-- ================= 08 ================= -->
+  <section class="chapter" id="s8">
+    <div class="section-heading"><span class="section-number">08</span><div>
+      <h2>数据落在哪里、怎么搬过去</h2>
+      <p>四个调用的 buffer 关系，和两条链路的搬运路径。</p>
+    </div></div>
+
+    <p class="lead">执行器里这四个调用，<b>逻辑上的输入输出</b>是这样的：</p>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>调用</th><th>链路</th><th>逻辑输入 → 输出</th></tr></thead>
+      <tbody>
+        <tr><td><b>Intra0</b> / <b>Inter1</b></td><td><span class="tag-mesh">Mesh</span> / <span class="tag-nhr">NHR</span></td><td><code>用户 input → 用户 output</code></td></tr>
+        <tr><td><b>Inter0</b> / <b>Intra1</b></td><td><span class="tag-nhr">NHR</span> / <span class="tag-mesh">Mesh</span></td><td><code>用户 output → 用户 output</code></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="lead">阶段 1 从用户输入读，阶段 2 只在用户输出上互相搬。每个源 rank <code>r</code> 的数据<b>直接按最终位置落进 output</b>：</p>
+    <div class="formula">
+      <span class="flabel">本次循环里，源 rank r 的两片在 output 中的偏移</span>
+      <div class="row">A 片：r · D + dataOffset0 ,　　dataOffset0 = processedCount × itemSize</div>
+      <div class="row">B 片：r · D + dataOffset1 ,　　dataOffset1 = dataOffset0 + currCountPart0 × itemSize</div>
+    </div>
+    <p class="lead">也就是说：<b>output 被切成 P 个连续的槽位</b>，每个槽位 <code>D</code> 字节，第 <code>r</code> 个槽位归源 rank <code>r</code>。槽位内部，本次循环要填的 A、B 两片是<b>相邻</b>的；而随着外层循环推进，各个循环的片段会在槽位内<b>依次偏移、跨步出现</b>。等全部循环跑完，每个槽位正好被填满，<b>没有空洞</b>。</p>
+
+    <div class="figure">
+      <div class="diagram-scroll">
+      <svg class="dg" viewBox="0 0 740 320" role="img" aria-labelledby="t-mem d-mem">
+        <title id="t-mem">Mesh 与 NHR 两条链路的搬运路径</title>
+        <desc id="d-mem">Mesh 路径把本地数据拷进本 rank 的 CCL buffer，由其他 rank 直接读走落到自己的 output；NHR 路径把本地数据拷进 CCL buffer 后逐轮转发，末轮直接从远端 CCL buffer 读进 output。</desc>
+        <defs>
+          <marker id="mk-mem" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8593a8"/>
+          </marker>
+        </defs>
+
+        <text x="40" y="34" font-size="14" font-weight="700" fill="#6255ce">Mesh 路径</text>
+        <g stroke="#8593a8" stroke-width="1.7" fill="none" marker-end="url(#mk-mem)">
+          <path d="M210 88 H281"/><path d="M455 88 H526"/>
+        </g>
+        <g font-size="11.5" fill="#627087" text-anchor="middle">
+          <text x="245" y="76">① 本地拷贝</text><text x="490" y="76">② 对方直接读走</text>
+        </g>
+        <g>
+          <rect x="40" y="60" width="170" height="56" rx="10" fill="#fff" stroke="#c7cbd6" stroke-width="1.4"/>
+          <rect x="285" y="60" width="170" height="56" rx="10" fill="#eeecfc" stroke="#c7bff0" stroke-width="1.5"/>
+          <rect x="530" y="60" width="170" height="56" rx="10" fill="#fff" stroke="#c7cbd6" stroke-width="1.4"/>
+        </g>
+        <g font-size="12.5" fill="#222d43" text-anchor="middle">
+          <text x="125" y="84">本 rank 的 input</text><text x="125" y="102" font-size="11" fill="#627087">本 rank 的 A 或 B 片</text>
+          <text x="370" y="84">本 rank 的 CCL buffer</text><text x="370" y="102" font-size="11" fill="#627087">只写一次，供他人读取</text>
+          <text x="615" y="84">其他 rank 的 output</text><text x="615" y="102" font-size="11" fill="#627087">落到最终位置</text>
+        </g>
+
+        <path d="M40 152 H700" stroke="#e2e6ef" stroke-width="1.4"/>
+
+        <text x="40" y="186" font-size="14" font-weight="700" fill="#117b70">NHR 路径</text>
+        <g stroke="#8593a8" stroke-width="1.7" fill="none" marker-end="url(#mk-mem)">
+          <path d="M210 240 H281"/><path d="M455 240 H526"/>
+        </g>
+        <g font-size="11.5" fill="#627087" text-anchor="middle">
+          <text x="245" y="228">① 本地拷贝</text><text x="490" y="228">② 末轮直接读 / 转发后落入</text>
+        </g>
+        <g>
+          <rect x="40" y="212" width="170" height="56" rx="10" fill="#fff" stroke="#c7cbd6" stroke-width="1.4"/>
+          <rect x="285" y="212" width="170" height="56" rx="10" fill="#e7f5f1" stroke="#b5dcd4" stroke-width="1.5"/>
+          <rect x="530" y="212" width="170" height="56" rx="10" fill="#fff" stroke="#c7cbd6" stroke-width="1.4"/>
+        </g>
+        <g font-size="12.5" fill="#222d43" text-anchor="middle">
+          <text x="125" y="236">本 rank 的 input</text><text x="125" y="254" font-size="11" fill="#627087">本 rank 的 A 或 B 片</text>
+          <text x="370" y="236">CCL buffer</text><text x="370" y="254" font-size="11" fill="#627087">逐轮收集、转发</text>
+          <text x="615" y="236">本 rank 的 output</text><text x="615" y="254" font-size="11" fill="#627087">落到最终位置</text>
+        </g>
+        <text x="40" y="300" font-size="12.5" fill="#627087">启用远端 output 访问时，模板直接在 output 上通信，可以省去相应的 CCL 中转。</text>
+      </svg>
+      </div>
+      <p class="figcap"><b>图 7 · 两条链路的搬运路径。</b>Mesh 只要一次本地拷贝就被别人读走；NHR 要在 CCL buffer 里经历逐轮收集与转发，代价更高，因此更适合承担"已经收拢成块"的大数据。</p>
+    </div>
+
+    <div class="keypoints">
+      <div class="kp-title">为什么阶段 2 也不写回 input</div>
+      <ul>
+        <li>阶段 2 的数据来源是<b>已经落好位的 output</b>，直接在原地收齐即可，不必再绕回输入缓冲区。</li>
+        <li>这样每个源 rank 的数据<b>只写一次最终位置</b>，避免了"先拼成连续块、再整块复制过去"的额外本地拷贝。</li>
+        <li>代价是 A、B 两片在 output 里是<b>跨步分布</b>的，所以实现上要用 <code>repeatNum</code> 描述这些不连续的数据片。</li>
+      </ul>
+    </div>
+
+    <h3 style="margin:32px 0 12px;font-size:18px">"末轮直读"不是无条件生效的</h3>
+    <p class="lead">图 7 里 NHR 的"末轮直接从远端 CCL buffer 读进 output"是一个<b>优化</b>，它需要同时满足几个条件：不是 PCIe 链路、没有开启远端内存访问、目标缓冲区确实是用户 output、且 output 与 CCL buffer 不是同一块内存。</p>
+    <p class="lead">这里的"远端内存访问"由执行器按 <code>(OpMode == OFFLOAD) || supportSymmetricMemory</code> 决定——也就是说<b>图模式下或开了对称内存时会走另一条路</b>：直接读写远端 output，此时"末轮直读"这个优化反而被禁用。PCIe 链路则改用 DMA read 的方式收发。</p>
+    <p class="note">这个优化<b>不改变流量体积</b>，它改变的是方向（写变读）和同步结构——末轮通信可以和"把已到达的片从本地 scratch 拷进 output"并行做。<b>所以它影响的是时间，而不是第 06 节算的字节数。</b></p>
+  </section>
+
+  <!-- ================= 09 ================= -->
+  <section class="chapter" id="s9">
+    <div class="section-heading"><span class="section-number">09</span><div>
+      <h2>时间模型：数据量不等于耗时</h2>
+      <p>把前面算出来的四个流量，装进一个粗糙但有用的式子。</p>
+    </div></div>
+
+    <p class="lead">按当前实现的阶段依赖关系，一次循环的耗时结构可以写成：</p>
+    <div class="formula">
+      <span class="flabel">一次循环</span>
+      <div class="row">T ≈ max( T<sub>Mesh</sub>(a),　T<sub>NHR</sub>(b) )　　<span style="color:#627087">← 阶段 1，两项并行</span></div>
+      <div class="row">　 + max( T<sub>NHR</sub>(M·a),　T<sub>Mesh</sub>(N·b) )　<span style="color:#627087">← 阶段 2，两项并行</span></div>
+      <div class="row">　 + T<sub>阶段同步</sub></div>
+    </div>
+
+    <p class="lead">这里的 <code>T_Mesh(·)</code> 和 <code>T_NHR(·)</code> 是各自模板在<b>给定数据量下</b>的耗时，它们内部包含各自的搬运、轮次同步和资源竞争。所以：</p>
+    <div class="keypoints">
+      <div class="kp-title">三条使用这个模型的注意事项</div>
+      <ul>
+        <li><b>数据量本身不能直接等同于耗时。</b>把 <code>V_Mesh</code> 和 <code>V_NHR</code> 相减得到的大小关系，只在两条链路"每字节成本相同"时才等于时间关系。</li>
+        <li><b>阶段 1 和阶段 2 的瓶颈可能不是同一条链路。</b>阶段 1 比的是 <code>a</code> 和 <code>b</code>；阶段 2 比的是 <code>M·a</code> 和 <code>N·b</code>。M ≠ N 时，两边的最优 ρ 会互相拉扯。</li>
+        <li><b>同步是串行的。</b>两个阶段之间的同步不参与并行，它是纯粹的额外开销。</li>
+      </ul>
+    </div>
+
+    <p class="lead">把第 06 节的流量公式代进"阶段 1 平衡"这个条件：<code>a</code> 和 <code>b</code> 的比等于两条链路的速率比。而"阶段 2 平衡"给出的比则是 <code>M·a : N·b</code> 等于速率比。两者只有在 <code>M = N</code> 时才可能同时满足——这就是为什么<b>切分比例需要跟着拓扑形状走</b>，而不能取一个固定的 0.5。</p>
+
+    <p class="note">本节只给出了耗时的<b>结构</b>，没有给出系数。要得到真实的最优 ρ，需要实测两条链路在不同数据量下的带宽与固定开销，那是另一个话题。</p>
+  </section>
+
+  <!-- ================= 10 ================= -->
+  <section class="chapter" id="s10">
+    <div class="section-heading"><span class="section-number">10</span><div>
+      <h2>代码地图与自测</h2>
+      <p>把图上的每个概念，对应到真实源码的位置。</p>
+    </div></div>
+
+    <h3 style="margin:0 0 12px;font-size:18px">先分清"算法名"和"执行器类"</h3>
+    <p class="lead"><code>AicpuAllGatherParallelMeshNHR</code> <b>不是类名，而是一个算法名字符串</b>——它是注册到算法目录里的那个"名字"。真正被实例化的，是一个类模板：</p>
+    <pre><code>// src/ops/all_gather/algorithm/executor/ins_v2_all_gather_parallel_executor.cc:804
+#if CANN_VERSION_NUM &gt;= CANN_VERSION(9, 0, 0)
+REGISTER_EXECUTOR_BY_TWO_TEMPS(
+    HcclCMDType::HCCL_CMD_ALLGATHER,
+    AicpuAllGatherParallelMeshNHR,     // ← 算法名（字符串）
+    InsV2AllGatherParallelExecutor,    // ← 执行器类模板
+    TopoMatchTwoLevel,                 // ← 拓扑匹配器
+    InsTempAllGatherMesh1D,            // ← 模板 0：管 Level 0（Mesh）
+    InsTempAllGatherNHR);              // ← 模板 1：管 Level 1（NHR）
+#endif</code></pre>
+    <p class="lead">对应的类声明是 <code>InsV2AllGatherParallelExecutor&lt;AlgTopoMatch, InsAlgTemplate0, InsAlgTemplate1&gt;</code>，基类 <code>InsCollAlgBase</code>。也就是说，<b>"并行"这件事是由执行器编排的，而两条链路各自怎么走，由两个模板分别决定</b>。</p>
+
+    <div class="codemap">
+      <div class="cm-row">
+        <span class="cm-path">.../executor/ins_v2_all_gather_parallel_executor.cc</span>
+        <span class="cm-what">执行器：注册、切分、阶段调度、两片偏移</span>
+      </div>
+      <div class="cm-row">
+        <span class="cm-path">.../executor/ins_v2_all_gather_parallel_executor.h</span>
+        <span class="cm-what">类模板声明与两个模板参数</span>
+      </div>
+      <div class="cm-row">
+        <span class="cm-path">.../template/aicpu/ins_temp_all_gather_nhr.cc</span>
+        <span class="cm-what">NHR 模板：轮次与切片计算、末轮直读</span>
+      </div>
+      <div class="cm-row">
+        <span class="cm-path">.../template/aicpu/ins_temp_all_gather_mesh_1D.cc</span>
+        <span class="cm-what">Mesh 模板：全连接读写路径</span>
+      </div>
+      <div class="cm-row">
+        <span class="cm-path">.../template/wrapper/alg_data_trans_wrapper.cc</span>
+        <span class="cm-what">阶段间同步的实现（线程 notify）</span>
+      </div>
+    </div>
+    <p class="note">路径前缀均为 <code>src/ops/all_gather/algorithm/</code>。</p>
+
+    <h3 style="margin:34px 0 12px;font-size:18px">MeshNHR 只是这一族里的一员</h3>
+    <p class="lead">同一个执行器类模板换一组模板参数，就能拼出不同的并行方案。下面这些都注册在同一个文件里（<code>MeshNHR</code> 通常还额外注册了一个 <code>MultiJetty</code> 变体）：</p>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>算法名</th><th>模板 0（Level 0）</th><th>模板 1（Level 1）</th></tr></thead>
+      <tbody>
+        <tr><td><code>AicpuAllGatherParallelMeshNHR</code></td><td><span class="tag-mesh">Mesh</span> 1D</td><td><span class="tag-nhr">NHR</span></td></tr>
+        <tr><td><code>AicpuAllGatherParallelNHRNHR</code></td><td><span class="tag-nhr">NHR</span></td><td><span class="tag-nhr">NHR</span></td></tr>
+        <tr><td><code>CcuSchedAllGatherParallelMeshNHR</code></td><td><span class="tag-mesh">Mesh</span>（CCU）</td><td><span class="tag-nhr">NHR</span>（CCU）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">另外还有走不同执行路径的近亲：<code>AicpuAllGatherConcurMeshNHR</code>（另一套并发执行器）和 <code>CcuSchedAllGatherPipeLineMeshNHR</code>（OmniPipe 二维切分）。本文讨论的两阶段模型，对它们中的"并行"一族同样适用。</p>
+
+    <h3 style="margin:34px 0 12px;font-size:18px">建议的阅读顺序</h3>
+    <p class="lead"><b>「切分比例 → 四组调用 → 阶段同步 → NHR 轮次」</b>：先在执行器里跟一遍 <code>multipleDimensionSplitRatio</code> 如何变成两片的元素个数（注意取整与 4K 对齐的滚存），再看四组模板调用分别绑定了哪些 buffer（阶段 2 的 in/out 都是用户 output），然后确认阶段之间靠什么同步（线程 notify，不是网络 barrier），最后进入 NHR 模板核对每轮的 <code>q_s</code> 与源 rank 序列。</p>
+
+    <h3 style="margin:34px 0 14px;font-size:18px">自测</h3>
+
+    <details><summary>Q1：ρ 变大，两条链路的流量各自怎么变？总发送量呢？</summary>
+      <div class="dc">
+        <p>ρ 是 B 片比例。B 片走"先 NHR 后 Mesh"，所以 <b>ρ 变大 → Mesh 流量变大、NHR 流量变小</b>。</p>
+        <p>总发送量 <code>V_Mesh + V_NHR = (P−1)·d</code> <b>保持不变</b>，与 ρ 无关。调切分比例只是在两条链路之间搬流量，不会让总量变少。</p>
+      </div>
+    </details>
+
+    <details><summary>Q2：M = 2、N = 8 时，流量均衡点 ρ* 大概是多少？为什么不是 0.5？</summary>
+      <div class="dc">
+        <p>代入 <code>ρ* = (M·N − 2M + 1) / [2(M−1)(N−1)] = (16 − 4 + 1) / (2 × 1 × 7) = 13/14 ≈ 0.93</code>。</p>
+        <p>不是 0.5 的原因：两条链路的公式不对称。<code>V_Mesh</code> 的上限是 <code>(M−1)·N·d</code>，<code>V_NHR</code> 的上限是 <code>(N−1)·M·d</code>。只有 M = N 时这两个上限才相等，交点才会落在中点。</p>
+      </div>
+    </details>
+
+    <details><summary>Q3：为什么阶段 2 必须等阶段 1 全部完成？</summary>
+      <div class="dc">
+        <p>因为阶段 2 传播的数据块，正是阶段 1 收集的<b>产物</b>。A 片要先在本行收齐成 <code>M·a</code>，才能作为一个完整块沿另一维扩散；B 片同理要先收齐成 <code>N·b</code>。</p>
+        <p>如果不等，阶段 2 传出去的就会是不完整的块，接收方也拼不出正确结果。</p>
+      </div>
+    </details>
+
+    <details><summary>Q4：NHR 一共发 N−1 份，为什么"转发"不会让流量翻倍？</summary>
+      <div class="dc">
+        <p>因为"份"统计的粒度不是"本 rank 自己的数据"。第 <code>s</code> 轮发出的份数 <code>q_s</code> 里，<b>既包含本 rank 原始数据，也包含前面轮次收到的数据</b>。</p>
+        <p>累计 <code>Σq_s = N − 1</code>，正好等于"每个 rank 需要贡献给其他 N−1 个 rank 的数据量"。转发是被计入这 N−1 份里的，不是额外的。</p>
+      </div>
+    </details>
+
+    <details><summary>Q5：如果两条链路带宽差很多，ρ 应该往哪边偏？</summary>
+      <div class="dc">
+        <p>让<b>快的那条链路多背一点</b>。具体做法是让两条链路的<b>时间</b>尽量相等，而不是让<b>字节数</b>相等。</p>
+        <p>也就是说，第 06 节算出的 ρ* 只是"字节均衡点"，实际要把 ρ 从它出发，朝着"给快链路加负载"的方向再挪一截。</p>
+      </div>
+    </details>
+  </section>
+
+  <footer class="article-footer">
+    <p class="strong">Linkforfuture · 集合通信学习笔记</p>
+    <p>本文所有公式均可由前文推导复算；图中的数值均为解析模型结果，<b>不代表实测性能</b>。<br>
+    源码路径为仓库相对路径，行号与细节以本地 <code>master</code> 分支快照为准，代码可能随 CANN 版本演进。<br>
+    整理日期 2026-09-16 · <a href="../index.html">返回主页 ↑</a><br>
+    姊妹篇：<a href="rs-ar-parallel.html">ReduceScatter / AllReduce Parallel 图解</a> —— 同一套二维拓扑与流量口径，看归约方向上的两个算子。</p>
+  </footer>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  var selM = document.getElementById('tf-m');
+  var selN = document.getElementById('tf-n');
+  var rho  = document.getElementById('tf-rho');
+  if (!selM || !selN || !rho) { return; }
+
+  var rhoOut   = document.getElementById('tf-rho-out');
+  var barMesh  = document.getElementById('tf-bar-mesh');
+  var barNhr   = document.getElementById('tf-bar-nhr');
+  var txtMesh  = document.getElementById('tf-mesh');
+  var txtNhr   = document.getElementById('tf-nhr');
+  var numP     = document.getElementById('tf-p');
+  var numMesh  = document.getElementById('tf-mesh-num');
+  var numNhr   = document.getElementById('tf-nhr-num');
+  var lineMesh = document.getElementById('tf-line-mesh');
+  var lineNhr  = document.getElementById('tf-line-nhr');
+  var cross    = document.getElementById('tf-cross');
+  var crossG   = document.getElementById('tf-cross-g');
+  var crossGd  = document.getElementById('tf-cross-guide');
+  var crossLb  = document.getElementById('tf-cross-label');
+  var verdict  = document.getElementById('tf-verdict');
+
+  // 堆叠条几何
+  var BAR_X = 120, BAR_W = 480;
+  // 折线图几何
+  var PL_X = 70, PL_Y = 30, PL_W = 550, PL_H = 160;
+
+  function vMesh(M, N, r) { return (M - 1) * (1 + (N - 1) * r); }
+  function vNhr(M, N, r)  { return (N - 1) * (M - (M - 1) * r); }
+
+  function fmt(v) { return v.toFixed(2) + ' d'; }
+
+  function draw() {
+    var M = parseInt(selM.value, 10);
+    var N = parseInt(selN.value, 10);
+    var r = parseFloat(rho.value);
+    var total = M * N - 1;
+
+    var vm = vMesh(M, N, r);
+    var vn = vNhr(M, N, r);
+
+    // 数值与堆叠条
+    rhoOut.textContent = r.toFixed(2);
+    numP.textContent = String(M * N);
+    numMesh.textContent = fmt(vm);
+    numNhr.textContent = fmt(vn);
+    txtMesh.textContent = fmt(vm);
+    txtNhr.textContent = fmt(vn);
+
+    var wm = Math.max(0, Math.round(BAR_W * vm / total));
+    var wn = Math.max(0, Math.round(BAR_W * vn / total));
+    barMesh.setAttribute('width', wm);
+    barNhr.setAttribute('width', wn);
+
+    // 两条曲线
+    var ptsM = [], ptsN = [], i, rr, x, y;
+    for (i = 0; i <= 40; i++) {
+      rr = i / 40;
+      x = PL_X + PL_W * rr;
+      y = PL_Y + PL_H * (1 - vMesh(M, N, rr) / total);
+      ptsM.push(x.toFixed(1) + ',' + y.toFixed(1));
+      y = PL_Y + PL_H * (1 - vNhr(M, N, rr) / total);
+      ptsN.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    lineMesh.setAttribute('points', ptsM.join(' '));
+    lineNhr.setAttribute('points', ptsN.join(' '));
+
+    // 均衡点 rho* = (MN - 2M + 1) / (2(M-1)(N-1))
+    var rStar = (M * N - 2 * M + 1) / (2 * (M - 1) * (N - 1));
+    if (rStar < 0) { rStar = 0; }
+    if (rStar > 1) { rStar = 1; }
+    var cx = PL_X + PL_W * rStar;
+    var cy = PL_Y + PL_H * (1 - vMesh(M, N, rStar) / total);
+    cross.setAttribute('cx', cx.toFixed(1));
+    cross.setAttribute('cy', cy.toFixed(1));
+    crossGd.setAttribute('d', 'M' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ' V' + (PL_Y + PL_H));
+    crossLb.setAttribute('x', Math.max(PL_X + 62, Math.min(cx, PL_X + PL_W - 62)).toFixed(1));
+    crossLb.setAttribute('y', (cy - 16 > PL_Y + 12 ? cy - 15 : cy + 25).toFixed(1));
+    crossLb.textContent = '均衡点 ρ* = ' + rStar.toFixed(2);
+
+    // 文字结论
+    var diff = vm - vn;
+    var html;
+    if (Math.abs(diff) < 0.005) {
+      html = '<b>ρ = ' + r.toFixed(2) + '：</b>两条链路的发送量几乎相等，正好落在均衡点上。';
+    } else if (diff > 0) {
+      html = '<b>ρ = ' + r.toFixed(2) + '：</b>Mesh 比 NHR 多背 ' + diff.toFixed(2) +
+             ' d。把 ρ 调小可以让流量往 NHR 那边挪。';
+    } else {
+      html = '<b>ρ = ' + r.toFixed(2) + '：</b>NHR 比 Mesh 多背 ' + (-diff).toFixed(2) +
+             ' d。把 ρ 调大可以让流量往 Mesh 那边挪。';
+    }
+    html += ' 两条合计恒为 <b>(P − 1)·d = ' + total + ' d</b>。';
+    verdict.innerHTML = html;
+  }
+
+  selM.addEventListener('change', draw);
+  selN.addEventListener('change', draw);
+  rho.addEventListener('input', draw);
+  draw();
+})();
+
+(function () {
+  // 侧栏与移动端导航的当前章节高亮
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a, .mobile-nav a'));
+  var sections = links.map(function (a) {
+    return document.querySelector(a.getAttribute('href'));
+  });
+  if (!sections.length || !('IntersectionObserver' in window)) { return; }
+
+  function activate(id) {
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+    });
+  }
+
+  var io = new IntersectionObserver(function (entries) {
+    var best = null;
+    entries.forEach(function (e) {
+      if (e.isIntersecting && (!best || e.intersectionRatio > best.intersectionRatio)) { best = e; }
+    });
+    if (best) { activate(best.target.id); }
+  }, { rootMargin: '-100px 0px -70% 0px', threshold: [0, 0.2, 0.5] });
+
+  sections.forEach(function (s) { if (s) { io.observe(s); } });
+})();
+</script>
+</body>
+</html>
