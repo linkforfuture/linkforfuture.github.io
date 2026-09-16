@@ -1,0 +1,1553 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="HCCL ReduceScatter / AllReduce Parallel 图解：两个维度逐步归约再分散，AllReduce 再沿反向路径 AllGather 恢复完整结果。逐阶段数清每个 rank 持有多少、发给谁、发多少字节。">
+<title>ReduceScatter / AllReduce Parallel · 逐步归约，反向恢复 · Linkforfuture</title>
+<style>
+:root{
+  --bg:#f8f9fc; --paper:#fff; --ink:#222d43; --muted:#627087; --line:#e2e6ef;
+  --purple:#6255ce; --purple-bg:#eeecfc; --purple-line:#c7bff0;
+  --teal:#117b70; --teal-bg:#e7f5f1; --teal-line:#b5dcd4;
+  --amber:#a96a17; --amber-bg:#fbf1e0; --amber-line:#e6cfa6;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  --radius:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.85;font-size:17px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--purple);text-decoration:none}
+a:hover{text-decoration:underline}
+p{margin:0 0 16px}
+h1,h2,h3{line-height:1.4;letter-spacing:-.02em}
+h2,h3{margin:0}
+code,pre{font-family:var(--mono)}
+p code,li code,td code{background:#eef0f6;border-radius:4px;padding:2px 5px;font-size:.86em;overflow-wrap:anywhere}
+svg{max-width:100%;height:auto;display:block}
+:focus-visible{outline:3px solid #7769e4;outline-offset:3px}
+
+/* ---------- 顶栏 ---------- */
+.site-header{height:70px;padding:0 40px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:20}
+.brand{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:750;color:var(--ink);white-space:nowrap}
+.brand:hover{text-decoration:none}
+.brand-mark{background:var(--ink);color:#fff;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;font-size:15px}
+.brand-sub{font-size:13px;color:var(--muted);font-weight:400;padding-left:10px;border-left:1px solid var(--line)}
+.header-actions{display:flex;gap:22px;font-size:13px}
+
+/* ---------- 骨架 ---------- */
+.page-shell{max-width:1400px;margin:auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:60px;padding:0 44px}
+.sidebar{position:sticky;top:110px;align-self:start;padding:6px 0 30px}
+.sidebar-label{font-size:10px;letter-spacing:.14em;font-weight:750;color:var(--muted)}
+.sidebar-title{font-size:21px;font-weight:700;margin:14px 0 26px;line-height:1.5}
+.sidebar nav{display:flex;flex-direction:column;gap:5px}
+.sidebar nav a{font-size:13px;padding:9px 12px;display:flex;gap:11px;border-radius:7px;color:var(--muted)}
+.sidebar nav a:hover{text-decoration:none;background:#f1f3f8}
+.sidebar nav a span{font-family:var(--mono);font-size:11px;color:#919aab;padding-top:1px}
+.sidebar nav a.active{background:var(--purple-bg);color:var(--purple);font-weight:650}
+.sidebar nav a.active span{color:var(--purple)}
+.sidebar-foot{border-top:1px solid var(--line);margin-top:30px;padding-top:18px;font-size:11px;color:var(--muted);line-height:2}
+.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-right:6px}
+main{min-width:0;max-width:1000px;padding-bottom:60px}
+
+/* ---------- 章节 ---------- */
+.chapter{padding:58px 0;border-bottom:1px solid var(--line);scroll-margin-top:24px}
+.chapter:last-of-type{border-bottom:0}
+.hero{padding-top:52px}
+.eyebrow{font-size:10px;letter-spacing:.14em;font-weight:750;color:var(--purple);margin-bottom:20px}
+h1{font-size:clamp(32px,3.6vw,52px);font-weight:780;margin:0 0 20px;line-height:1.25;letter-spacing:-.04em}
+h1>span{color:var(--purple)}
+.hero-description{color:var(--muted);font-size:18px;line-height:1.9;margin-bottom:24px}
+.hero-meta{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.hero-meta span::before{content:"✓";margin-right:6px;color:var(--teal)}
+.section-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:26px}
+.section-number{font-family:var(--mono);color:var(--purple);font-size:14px;padding-top:6px}
+.section-heading h2{font-size:27px;font-weight:720;margin-bottom:8px}
+.section-heading p{color:var(--muted);font-size:15px;margin:0}
+.lead{font-size:17px;line-height:1.9;margin-bottom:20px}
+.lead b{color:var(--ink)}
+h3.sub{font-size:18px;font-weight:700;margin:30px 0 14px}
+
+/* ---------- 图 ---------- */
+.figure{border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px 16px 12px;margin:22px 0}
+.figure .dg{width:100%;min-width:560px}
+.diagram-scroll{overflow-x:auto}
+.figcap{color:var(--muted);font-size:12.5px;line-height:1.8;margin:10px 2px 0}
+.figcap b{color:var(--ink);font-weight:600}
+
+/* ---------- SVG 通用 ---------- */
+.dg text{font-size:12.5px;fill:#3c4a5f}
+.dg .lb{font-size:11.5px;fill:#627087}
+.dg .ttl{font-size:13px;font-weight:700;fill:#222d43}
+.dg .mono{font-family:var(--mono)}
+.dg .sm{font-size:11px}
+.dg .box{fill:#fff;stroke:#c9cfdd;stroke-width:1.4}
+.dg .bA{fill:#eeecfc;stroke:#c7bff0;stroke-width:1.4}
+.dg .bB{fill:#e7f5f1;stroke:#b5dcd4;stroke-width:1.4}
+.dg .bOut{fill:#fbf1e0;stroke:#e6cfa6;stroke-width:1.4}
+.dg .bGray{fill:#f2f4fa;stroke:#d9dfea;stroke-width:1.4}
+.dg .ln{stroke:#c9cfdd;stroke-width:1.6;fill:none}
+.dg .lMesh{stroke:#6255ce;stroke-width:1.6;fill:none}
+.dg .lNhr{stroke:#117b70;stroke-width:1.6;fill:none}
+.dg .lSoft{stroke:#c9cfdd;stroke-width:1.2;fill:none}
+.dg .dash{stroke:#a96a17;stroke-width:1.4;stroke-dasharray:5 5;fill:none}
+.dg .dashSoft{stroke:#c9cfdd;stroke-width:1.2;stroke-dasharray:4 4;fill:none}
+.dg .tA{fill:#4c429c;font-weight:650}
+.dg .tB{fill:#0f6d63;font-weight:650}
+.dg .tMesh{fill:#6255ce;font-weight:650}
+.dg .tNhr{fill:#117b70;font-weight:650}
+
+/* ---------- 要点框 ---------- */
+.keypoints{background:#f2f4fa;border:1px solid var(--line);border-left:3px solid var(--purple);border-radius:12px;padding:16px 22px;margin:22px 0}
+.keypoints .kp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;letter-spacing:.02em}
+.keypoints ul{margin:0;padding-left:19px}
+.keypoints li{margin:6px 0;font-size:15px;color:#3c4a5f}
+.keypoints li::marker{color:var(--purple)}
+.keypoints code{background:#e6e9f3}
+.note{font-size:13.5px;color:var(--muted);line-height:1.9;margin:18px 0 0}
+.note b{color:var(--ink)}
+.warn{background:#fdf6ec;border:1px solid var(--amber-line);border-left:3px solid var(--amber);border-radius:12px;padding:16px 22px;margin:22px 0;font-size:14.5px;color:#5a4526}
+.warn .wp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;color:var(--amber)}
+.warn code{background:#f6e9d4}
+.derive{background:#f2f0fc;border:1px dashed var(--purple-line);border-radius:12px;padding:16px 22px;margin:22px 0;font-size:14.5px;color:#3c4a5f}
+.derive .dp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;color:var(--purple);letter-spacing:.02em}
+.derive code{background:#e6e3f8}
+
+/* ---------- 表格 ---------- */
+.table-scroll{overflow-x:auto;margin:22px 0}
+table{width:100%;border-collapse:collapse;background:#fff;font-size:14px;min-width:520px}
+th,td{border:1px solid var(--line);padding:10px 13px;text-align:left;vertical-align:top}
+th{background:#f1f0f8;font-weight:650;font-size:13px}
+tbody tr:nth-child(even){background:#fbfcfe}
+td.num,th.num{font-family:var(--mono);font-size:13px;white-space:nowrap}
+.tag-a,.tag-b{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap}
+.tag-a{background:var(--purple-bg);color:var(--purple)}
+.tag-b{background:var(--teal-bg);color:var(--teal)}
+.tag-mesh,.tag-nhr{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;white-space:nowrap}
+.tag-mesh{background:var(--purple-bg);color:var(--purple)}
+.tag-nhr{background:var(--teal-bg);color:var(--teal)}
+.tag-lv{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;background:#fbf1e0;color:var(--amber);white-space:nowrap}
+
+/* ---------- 公式 ---------- */
+.formula{border:1px solid var(--purple-line);background:#f2f0fc;border-radius:12px;padding:20px 24px;margin:22px 0;
+  font-family:var(--mono);font-size:15px;line-height:2.1;overflow-x:auto}
+.formula .flabel{font-family:inherit;font-size:11px;color:var(--muted);letter-spacing:.1em;font-weight:700;display:block;margin-bottom:8px}
+.formula .row{white-space:nowrap}
+.formula .hi{color:var(--purple);font-weight:700}
+
+/* ---------- 交互面板 ---------- */
+.panel{border:1px solid var(--line);border-radius:var(--radius);background:#fff;padding:24px;margin:24px 0}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.panel-head h3{font-size:18px}
+.mini-label{font-size:10px;letter-spacing:.13em;font-weight:750;color:var(--muted)}
+.pill{font-size:11px;color:var(--muted);border:1px solid var(--line);background:#fafbfe;padding:4px 10px;border-radius:6px;white-space:nowrap}
+.controls{display:grid;grid-template-columns:110px 110px 130px minmax(0,1fr);gap:20px;align-items:end;margin-bottom:22px}
+.controls label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:8px}
+select{font:inherit;font-size:14px;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--purple);cursor:pointer;min-height:24px}
+.rho-head{display:flex;justify-content:space-between;align-items:baseline}
+.rho-head output{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--purple)}
+.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
+.readout>div{display:flex;flex-direction:column;gap:3px}
+.readout small{font-size:11.5px;color:var(--muted)}
+.readout strong{font-family:var(--mono);font-size:20px}
+.readout .c-mesh{color:var(--purple)} .readout .c-nhr{color:var(--teal)} .readout .c-sum{color:var(--ink)}
+.verdict{background:#f4f2fc;border-radius:10px;padding:16px 20px;margin-top:20px;font-size:14.5px;color:#3c4a5f}
+.verdict b{color:var(--purple)}
+.legend-inline{display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:12px 2px 0}
+.legend-inline i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+/* ---------- 代码 ---------- */
+.codemap{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;margin:22px 0}
+.codemap .cm-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);align-items:baseline}
+.codemap .cm-row:last-child{border-bottom:0}
+.codemap .cm-path{font-family:var(--mono);font-size:12.5px;color:#4c429c;overflow-wrap:anywhere}
+.codemap .cm-what{font-size:12.5px;color:var(--muted);text-align:right;white-space:nowrap}
+pre{background:#202b40;color:#e1e7f2;padding:18px 20px;border-radius:12px;overflow:auto;font-size:13px;line-height:1.9;margin:22px 0}
+pre .c{color:#8fa3c4}
+pre .k{color:#c792ea}
+pre .s{color:#a5d6a7}
+
+/* ---------- 细节折叠 ---------- */
+details{border:1px solid var(--line);border-radius:12px;background:#fff;margin:14px 0}
+summary{cursor:pointer;padding:15px 20px;font-size:14.5px;font-weight:650}
+details[open] summary{border-bottom:1px solid var(--line)}
+details .dc{padding:18px 22px;font-size:14.5px;color:#3c4a5f}
+details .dc p:last-child,details .dc ul:last-child{margin-bottom:0}
+details .dc ul{padding-left:20px}
+
+/* ---------- 页脚 ---------- */
+.article-footer{padding:34px 0 50px;font-size:12px;color:var(--muted)}
+.article-footer .strong{color:var(--ink);font-weight:650;font-size:13px}
+.article-footer code{font-size:11px;overflow-wrap:anywhere}
+
+.mobile-nav{display:none}
+@media(max-width:1120px){
+  .page-shell{grid-template-columns:190px minmax(0,1fr);gap:34px;padding:0 30px}
+  .site-header{padding:0 30px}
+  .sidebar-title{font-size:18px}
+  .controls{grid-template-columns:100px 100px 120px minmax(0,1fr);gap:14px}
+}
+@media(max-width:880px){
+  .sidebar{display:none}
+  .page-shell{display:block;padding:0 26px}
+  .mobile-nav{display:flex;overflow-x:auto;gap:8px;padding:10px 26px;background:#fff;border-bottom:1px solid var(--line);
+    position:sticky;top:70px;z-index:19;scrollbar-width:thin}
+  .mobile-nav a{white-space:nowrap;font-size:12px;padding:5px 9px;color:var(--muted);border-radius:6px}
+  .mobile-nav a.active{background:var(--purple-bg);color:var(--purple)}
+  html{scroll-padding-top:140px}
+  .chapter{padding:42px 0}
+  .controls{grid-template-columns:1fr 1fr;gap:14px}
+  .controls .rho-wrap{grid-column:1/-1}
+}
+@media(max-width:640px){
+  body{font-size:16px}
+  .site-header{height:60px;padding:0 17px;gap:10px}
+  .brand{font-size:14px;gap:8px}
+  .brand-mark{width:25px;height:25px;font-size:13px}
+  .brand-sub{display:none}
+  .header-actions{font-size:11.5px;gap:13px}
+  .page-shell{padding:0 17px}
+  .mobile-nav{top:60px;padding:8px 17px}
+  html{scroll-padding-top:126px}
+  h1{font-size:31px}
+  .hero-description{font-size:16px}
+  .section-heading h2{font-size:22px}
+  .readout{grid-template-columns:1fr;gap:10px}
+  .codemap .cm-row{grid-template-columns:1fr;gap:4px}
+  .codemap .cm-what{text-align:left}
+  .figure{padding:12px 10px 8px}
+  .figure .dg{min-width:640px}
+  table{font-size:12.5px;min-width:480px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+@media print{
+  .site-header,.sidebar,.mobile-nav,.controls{display:none!important}
+  .page-shell{display:block;padding:0;max-width:none}
+  .chapter{padding:22px 0}
+  .diagram-scroll{overflow:visible}
+  .figure .dg{min-width:0}
+  .chapter{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<a href="#main" style="position:fixed;top:-100px;left:20px;background:#222d43;color:#fff;padding:10px 20px;z-index:100;border-radius:8px">跳到正文</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="mk-mesh" markerWidth="4.5" markerHeight="4.5" refX="4.5" refY="2.25" orient="auto-start-reverse">
+      <path d="M0,0 L4.5,2.25 L0,4.5 z" fill="#6255ce"/>
+    </marker>
+    <marker id="mk-nhr" markerWidth="4.5" markerHeight="4.5" refX="4.5" refY="2.25" orient="auto-start-reverse">
+      <path d="M0,0 L4.5,2.25 L0,4.5 z" fill="#117b70"/>
+    </marker>
+    <marker id="mk-gray" markerWidth="4.5" markerHeight="4.5" refX="4.5" refY="2.25" orient="auto-start-reverse">
+      <path d="M0,0 L4.5,2.25 L0,4.5 z" fill="#9aa3b4"/>
+    </marker>
+    <marker id="mk-amber" markerWidth="4.5" markerHeight="4.5" refX="4.5" refY="2.25" orient="auto-start-reverse">
+      <path d="M0,0 L4.5,2.25 L0,4.5 z" fill="#a96a17"/>
+    </marker>
+  </defs>
+</svg>
+
+<header class="site-header">
+  <a class="brand" href="../index.html"><span class="brand-mark">L</span>Linkforfuture<span class="brand-sub">/ 学习笔记</span></a>
+  <div class="header-actions">
+    <a href="study.html">XCCL笔记</a>
+    <a href="hccl-selector.html">Selector图解</a>
+    <a href="allgather-parallel.html">AllGather Parallel</a>
+  </div>
+</header>
+
+<nav class="mobile-nav" aria-label="章节导航">
+  <a href="#s1">01 为什么放在一起</a><a href="#s2">02 口径与ρ语义</a><a href="#s3">03 RS 切分</a>
+  <a href="#s4">04 RS 两阶段</a><a href="#s5">05 AR 四阶段</a><a href="#s6">06 分片所有权</a>
+  <a href="#s7">07 归约在哪里</a><a href="#s8">08 NHR 镜像</a><a href="#s9">09 时间模型</a><a href="#s10">10 代码地图</a>
+</nav>
+
+<div class="page-shell">
+  <aside class="sidebar">
+    <div class="sidebar-label">HCCL / ALGORITHM ATLAS</div>
+    <p class="sidebar-title">ReduceScatter<br>/ AllReduce<br>Parallel 图解</p>
+    <nav aria-label="章节导航">
+      <a href="#s1"><span>01</span>为什么放在一起看</a>
+      <a href="#s2"><span>02</span>统一口径与 ρ 语义</a>
+      <a href="#s3"><span>03</span>RS：在每个目标块内切分</a>
+      <a href="#s4"><span>04</span>RS 两阶段与流量账</a>
+      <a href="#s5"><span>05</span>AR：RS → RS → AG → AG</a>
+      <a href="#s6"><span>06</span>分片所有权</a>
+      <a href="#s7"><span>07</span>归约发生在哪里</a>
+      <a href="#s8"><span>08</span>NHR 逐轮：互为镜像</a>
+      <a href="#s9"><span>09</span>时间模型与开销</a>
+      <a href="#s10"><span>10</span>代码地图与自测</a>
+    </nav>
+    <div class="sidebar-foot">
+      <span class="status-dot"></span>基于本地源码快照<br>
+      行号对应 <code>master</code> 分支<br>
+      整理日期 2026-09-16
+    </div>
+  </aside>
+
+  <main id="main">
+
+    <!-- ================= HERO ================= -->
+    <section class="chapter hero">
+      <div class="eyebrow">HCCL / ALGORITHM ATLAS · 09</div>
+      <h1>两个维度<span>逐步归约</span>，<br>再沿反向路径<span>恢复</span></h1>
+      <p class="hero-description">
+        ReduceScatter Parallel 把每个 rank 的数据沿 Level 0 与 Level 1 两个维度分两步归约、分散；
+        AllReduce Parallel 则在它后面再接两个 AllGather 阶段，沿相反路径把结果收回来。
+        这篇笔记逐阶段数清每个 rank 持有多少、发给谁、发多少字节。
+      </p>
+      <div class="hero-meta"><span>9 张编号图解 + 1 张交互图表，全部 SVG 手绘</span><span>流量公式可自行复算</span><span>附可拖动的切分比例模型</span></div>
+    </section>
+
+    <!-- ================= 01 ================= -->
+    <section class="chapter" id="s1">
+      <div class="section-heading">
+        <div class="section-number">01</div>
+        <div>
+          <h2>为什么这两个算子可以放在一起看</h2>
+          <p>AllReduce = ReduceScatter + AllGather，而这里连路径都是镜像的</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        ReduceScatter 的目标是「<b>归约完再分散</b>」：每个 rank 输入 <code>P·d</code> 字节，
+        输出 <code>d</code> 字节，且这 <code>d</code> 字节对应的是<b>某一个</b>目标 rank 的数据块，里面已经集齐了全部 <code>P</code> 个 rank 的贡献。
+      </p>
+      <p class="lead">
+        AllReduce 的目标是「<b>归约完还要人手一份</b>」：输入输出都是 <code>S</code> 字节。
+        最自然的实现就是先按 ReduceScatter 的方式把数据归约并散开，再沿<b>相反的顺序</b>把结果收集回来 ——
+        这正是 <code>AicpuAllReduceParallelMeshNHR</code> 做的事。
+      </p>
+
+      <div class="keypoints">
+        <div class="kp-title">最直接的证据：AllReduce 的执行器一次性注册了四个模板</div>
+        <ul>
+          <li>ReduceScatter 侧只注册<b>两个</b>：<span class="tag-mesh">InsTempReduceScatterMesh1D</span> 与 <span class="tag-nhr">InsTempReduceScatterNHR</span>。</li>
+          <li>AllReduce 侧注册<b>四个</b>，横跨两个算子的模板家族：两个 ReduceScatter 模板 + <span class="tag-mesh">InsTempAllGatherMesh1D</span> + <span class="tag-nhr">InsTempAllGatherNHR</span>。</li>
+          <li>也就是说，「RS 两阶段 + AG 两阶段」不是我们的比喻，而是源码里的<b>模板装配方式</b>。见 §10 的注册片段。</li>
+        </ul>
+      </div>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 700 200" role="img" aria-labelledby="t-f0 d-f0">
+          <title id="t-f0">ReduceScatter 与 AllReduce 的数据量关系</title>
+          <desc id="d-f0">ReduceScatter 输入 P 倍 d，输出 d；AllReduce 输入输出都是 S。</desc>
+          <text class="ttl" x="20" y="30">ReduceScatter</text>
+          <rect class="bGray" x="20" y="46" width="240" height="40" rx="8"/>
+          <text class="mono" x="140" y="72" text-anchor="middle">输入 = P · d</text>
+          <line class="lMesh" x1="268" y1="66" x2="322" y2="66" marker-end="url(#mk-mesh)"/>
+          <text class="lb" x="295" y="52" text-anchor="middle">归约 + 分散</text>
+          <rect class="bA" x="330" y="46" width="120" height="40" rx="8"/>
+          <text class="mono tA" x="390" y="72" text-anchor="middle">输出 = d</text>
+
+          <text class="ttl" x="20" y="140">AllReduce</text>
+          <rect class="bGray" x="20" y="156" width="240" height="40" rx="8"/>
+          <text class="mono" x="140" y="182" text-anchor="middle">输入 = S</text>
+          <line class="lMesh" x1="268" y1="176" x2="322" y2="176" marker-end="url(#mk-mesh)"/>
+          <text class="lb" x="295" y="162" text-anchor="middle">前两阶段</text>
+          <line class="lNhr" x1="268" y1="176" x2="322" y2="176" marker-end="url(#mk-nhr)" transform="translate(0,0)"/>
+          <rect class="bA" x="330" y="156" width="120" height="40" rx="8"/>
+          <text class="mono tA" x="390" y="182" text-anchor="middle">= d</text>
+          <line class="lNhr" x1="458" y1="176" x2="512" y2="176" marker-end="url(#mk-nhr)"/>
+          <text class="lb" x="485" y="162" text-anchor="middle">后两阶段</text>
+          <rect class="bOut" x="520" y="156" width="140" height="40" rx="8"/>
+          <text class="mono" x="590" y="182" text-anchor="middle" fill="#a96a17">输出 = S</text>
+
+          <text class="lb" x="330" y="212">S = P · d（一轮循环里，P 个目标块各 d 字节）</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 1</b>　ReducesScatter 把 <code>P·d</code> 压成 <code>d</code>；AllReduce 在前两阶段做同样的事，再用后两阶段把 <code>d</code> 扩回 <code>S</code>。</p>
+      </figure>
+
+      <p class="note">
+        注意「<b>反向</b>」具体指什么：对 A 片，ReduceScatter 的顺序是 <span class="tag-mesh">Mesh</span> → <span class="tag-nhr">NHR</span>，
+        而 AllGather 的顺序是 <span class="tag-nhr">NHR</span> → <span class="tag-mesh">Mesh</span>；B 片同理，两条路径各自把顺序倒过来。
+        这不是巧合：归约是「先拆开、后合拢」，收集就必须「先合拢、后拆开」。
+      </p>
+    </section>
+
+    <!-- ================= 02 ================= -->
+    <section class="chapter" id="s2">
+      <div class="section-heading">
+        <div class="section-number">02</div>
+        <div>
+          <h2>统一口径与 ρ 语义</h2>
+          <p>先把统计边界和配置含义对齐，后面的数字才有意义</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        沿用二维拓扑：<b>Level 0 大小为 <code>M</code></b>（Mesh / 同一 j 沿 i 方向），
+        <b>Level 1 大小为 <code>N</code></b>（NHR / 同一 i 沿 j 方向），总 rank 数 <code>P = M·N</code>，
+        rank 编号 <code>r = j·M + i</code>。源码里对应 <code>rankIdxLevel0_ = myRank % M</code>、<code>rankIdxLevel1_ = myRank / M</code>。
+      </p>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 560 320" role="img" aria-labelledby="t-f1 d-f1">
+          <title id="t-f1">二维拓扑 M=3 N=2 与 rank 编号</title>
+          <desc id="d-f1">M 为 Level0 列数，N 为 Level1 行数，rank 编号 r = j 乘 M 加 i；Mesh 沿同一行水平连接，NHR 沿同一列垂直连接。</desc>
+
+          <text class="lb" x="45" y="60" text-anchor="middle">j=0</text>
+          <text class="lb" x="45" y="170" text-anchor="middle">j=1</text>
+          <text class="lb" x="120" y="30" text-anchor="middle">i=0</text>
+          <text class="lb" x="280" y="30" text-anchor="middle">i=1</text>
+          <text class="lb" x="440" y="30" text-anchor="middle">i=2</text>
+
+          <line class="lMesh" x1="170" y1="105" x2="225" y2="105" marker-start="url(#mk-mesh)" marker-end="url(#mk-mesh)"/>
+          <line class="lMesh" x1="330" y1="105" x2="385" y2="105" marker-start="url(#mk-mesh)" marker-end="url(#mk-mesh)"/>
+          <line class="lMesh" x1="170" y1="215" x2="225" y2="215" marker-start="url(#mk-mesh)" marker-end="url(#mk-mesh)"/>
+          <line class="lMesh" x1="330" y1="215" x2="385" y2="215" marker-start="url(#mk-mesh)" marker-end="url(#mk-mesh)"/>
+
+          <line class="lNhr" x1="120" y1="133" x2="120" y2="182" marker-start="url(#mk-nhr)" marker-end="url(#mk-nhr)"/>
+          <line class="lNhr" x1="280" y1="133" x2="280" y2="182" marker-start="url(#mk-nhr)" marker-end="url(#mk-nhr)"/>
+          <line class="lNhr" x1="440" y1="133" x2="440" y2="182" marker-start="url(#mk-nhr)" marker-end="url(#mk-nhr)"/>
+
+          <rect class="bA" x="70" y="77" width="100" height="56" rx="10"/>
+          <text class="mono tA" x="120" y="112" text-anchor="middle">r0</text>
+          <rect class="bA" x="230" y="77" width="100" height="56" rx="10"/>
+          <text class="mono tA" x="280" y="112" text-anchor="middle">r1</text>
+          <rect class="bA" x="390" y="77" width="100" height="56" rx="10"/>
+          <text class="mono tA" x="440" y="112" text-anchor="middle">r2</text>
+
+          <rect class="bB" x="70" y="187" width="100" height="56" rx="10"/>
+          <text class="mono tB" x="120" y="222" text-anchor="middle">r3</text>
+          <rect class="bB" x="230" y="187" width="100" height="56" rx="10"/>
+          <text class="mono tB" x="280" y="222" text-anchor="middle">r4</text>
+          <rect class="bB" x="390" y="187" width="100" height="56" rx="10"/>
+          <text class="mono tB" x="440" y="222" text-anchor="middle">r5</text>
+
+          <line class="lMesh" x1="20" y1="283" x2="46" y2="283" marker-end="url(#mk-mesh)"/>
+          <text class="lb" x="54" y="287">Mesh（Level 0）：同一 j，沿 i 方向</text>
+          <line class="lNhr" x1="290" y1="283" x2="316" y2="283" marker-end="url(#mk-nhr)"/>
+          <text class="lb" x="324" y="287">NHR（Level 1）：同一 i，沿 j 方向</text>
+          <text class="lb" x="20" y="308">本图 P = M·N = 6；§3 之后的走查用 M = N = 2（r0…r3）让算式短一些。</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 2</b>　<code>i</code> 是 Level 0 下标（列），<code>j</code> 是 Level 1 下标（行）。<code>r = j·M + i</code> 决定了 rank 编号。</p>
+      </figure>
+
+      <h3 class="sub">统计口径</h3>
+      <p>
+        本文统计的是<b>每 rank 的网络有效载荷发送量</b>，包含中间结果的转发，不计协议开销、通知和本地拷贝。
+        在等长分片下收发量相等，所以只报发送量。
+      </p>
+
+      <h3 class="sub">ρ 的含义：两个算子族的约定是相反的</h3>
+      <p>
+        这是读源码时最容易踩的坑。配置项 <code>multipleDimensionSplitRatio</code> 在
+        ReduceScatter / AllReduce 里表示<b>先 Mesh 的那一份</b>，在 AllGather 里却表示<b>先 NHR 的那一份</b>。
+        本文用 <code>ρ</code> 统一表示<b>本次两个算子的先 Mesh 比例</b>。
+      </p>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 660 270" role="img" aria-labelledby="t-f2 d-f2">
+          <title id="t-f2">三个算法的切分口径对照</title>
+          <desc id="d-f2">ReduceScatter 在每个目标块内部切分，AllReduce 在整块输入上切分，两者 rho 都指先 Mesh 的那份；AllGather 在整块上切分但 rho 指先 NHR 的那份。</desc>
+
+          <text class="ttl" x="20" y="42">ReduceScatter</text>
+          <text class="lb" x="20" y="62">每个目标块内切</text>
+          <rect class="bA" x="200" y="35" width="47" height="34" rx="4"/>
+          <rect class="bB" x="247" y="35" width="47" height="34" rx="4"/>
+          <rect class="bA" x="298" y="35" width="47" height="34" rx="4"/>
+          <rect class="bB" x="345" y="35" width="47" height="34" rx="4"/>
+          <rect class="bA" x="396" y="35" width="47" height="34" rx="4"/>
+          <rect class="bB" x="443" y="35" width="47" height="34" rx="4"/>
+          <rect class="bA" x="494" y="35" width="47" height="34" rx="4"/>
+          <rect class="bB" x="541" y="35" width="47" height="34" rx="4"/>
+          <text class="lb tA" x="223" y="86" text-anchor="middle">A ρd</text>
+          <text class="lb tB" x="270" y="86" text-anchor="middle">B</text>
+          <text class="lb" x="620" y="60" text-anchor="end" fill="#6255ce">ρ → A</text>
+
+          <text class="ttl" x="20" y="128">AllReduce</text>
+          <text class="lb" x="20" y="148">整块输入切</text>
+          <rect class="bA" x="200" y="121" width="195" height="34" rx="4"/>
+          <rect class="bB" x="395" y="121" width="195" height="34" rx="4"/>
+          <text class="lb tA" x="297" y="144" text-anchor="middle">A = ρS</text>
+          <text class="lb tB" x="492" y="144" text-anchor="middle">B = (1−ρ)S</text>
+          <text class="lb" x="620" y="146" text-anchor="end" fill="#6255ce">ρ → A</text>
+
+          <text class="ttl" x="20" y="214">AllGather</text>
+          <text class="lb" x="20" y="234">整块切，但 ρ 指右边</text>
+          <rect class="bA" x="200" y="207" width="195" height="34" rx="4"/>
+          <rect class="bB" x="395" y="207" width="195" height="34" rx="4"/>
+          <text class="lb tA" x="297" y="230" text-anchor="middle">片0 · 先 Mesh</text>
+          <text class="lb tB" x="492" y="230" text-anchor="middle">片1 · 先 NHR</text>
+          <text class="lb" x="620" y="232" text-anchor="end" fill="#117b70">ρ → 这里</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 3</b>　源码注释写得很直白：AllGather「与 ReduceScatter 等算子相反，配置值表示数据片 1 的比例」。所以跨算子对比 ρ 时一定要先确认指的是哪一份。</p>
+      </figure>
+
+      <details>
+        <summary>ρ 到底从哪里来？优先级与默认值</summary>
+        <div class="dc">
+          <p>优先级从高到低（<code>op_common.cc:3748</code>）：</p>
+          <ul>
+            <li><b>通信域配置</b> —— <code>HcclSetConfig</code> 下发的 <code>HCCL_CONFIG_TYPE_MULTIPLE_DIMENSION_SPLIT_RATIO</code>，来源标记 <code>COMM_CONFIG</code>。</li>
+            <li><b>环境变量</b> —— <code>HCCL_ALG_MULTIPLE_DIMENSION_SPLIT_RATIO</code>（<code>src/common/alg_env_config.cc:125</code>），需为有限值且在 <code>[0,1]</code>，来源标记 <code>ENV_CONFIG</code>。</li>
+            <li><b>内置公式</b> —— 都没配时来源标记为 <code>BUILTIN_FORMULA</code>，此时调用 <code>CalcParallelDataSplitRatio</code> 按<b>端口带宽</b>算，不是简单取 0.5。</li>
+          </ul>
+          <p>
+            内置公式的大意：mesh 侧时间系数 <code>≈ 21/20 · (M−1)/(M·intraPorts)</code>，
+            clos 侧 <code>≈ (N−1)/(N·interPorts/2)</code>，取使两侧相等的比例，
+            再<b>量化到 1/8 的整数倍</b>并夹在 <code>[1/8, 7/8]</code>。0.5 只是公式失效时的回退值。
+          </p>
+        </div>
+      </details>
+
+      <div class="warn">
+        <div class="wp-title">非末轮的 4K 对齐会让实际比例略微偏离配置值</div>
+        两个算子在分循环（loop）时，只要不是最后一轮，part0 / part1 各自的字节数都会<b>向下取整到 <code>AICPU_ALIGN_SIZE</code>（4096）</b>；
+        余量滚到最后一轮用不齐的值，因此<b>跨轮总量是精确的</b>，但单轮的等效 ρ 会略小于配置值。
+        上一轮的余量集中在末轮处理，这是分循环实现的常规做法。
+      </div>
+    </section>
+
+    <!-- ================= 03 ================= -->
+    <section class="chapter" id="s3">
+      <div class="section-heading">
+        <div class="section-number">03</div>
+        <div>
+          <h2>ReduceScatter：在每个目标块内部切分</h2>
+          <p>切分粒度是这篇笔记里第二个容易搞错的地方</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        设每 rank 最终输出 <code>d</code> 字节，那么每 rank 输入是 <code>P·d</code> 字节，可以看成
+        <b><code>P</code> 个「目标 rank 的块」，每块 <code>d</code> 字节，块 <code>t</code> 落在 offset <code>t·d</code></b>。
+        记 <code>X<sub>s</sub>[t]</code> 为源 rank <code>s</code> 对目标 rank <code>t</code> 的贡献，则最终
+        <code>Y<sub>t</sub> = ⊕<sub>s</sub> X<sub>s</sub>[t]</code>，其中 <code>⊕</code> 是配置的归约操作。
+      </p>
+
+      <p class="lead">
+        切分发生在<b>每一个目标块内部</b>：<code>X<sub>s</sub>[t] = A<sub>s</sub>[t] ‖ B<sub>s</sub>[t]</code>，
+        其中 <code>a = ρd</code>、<code>b = (1−ρ)d</code>。
+        于是每 rank 的输入里含有 <code>P</code> 个 A 片和 <code>P</code> 个 B 片，总量分别是 <code>Pa</code> 和 <code>Pb</code>。
+      </p>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 640 190" role="img" aria-labelledby="t-f3 d-f3">
+          <title id="t-f3">ReduceScatter 单 rank 输入布局：P 个目标块，每块切成 A 片与 B 片</title>
+          <desc id="d-f3">输入由 P 个 d 字节的目标块组成，每块内部再切成 rho 比例的 A 片与剩余的 B 片。</desc>
+          <line class="lSoft" x1="30" y1="45" x2="171" y2="45"/>
+          <line class="lSoft" x1="30" y1="40" x2="30" y2="50"/>
+          <line class="lSoft" x1="171" y1="40" x2="171" y2="50"/>
+          <text class="lb mono" x="100" y="34" text-anchor="middle">d</text>
+
+          <rect class="bA" x="30" y="60" width="70" height="48" rx="4"/>
+          <rect class="bB" x="100" y="60" width="71" height="48" rx="4"/>
+          <rect class="bA" x="175" y="60" width="70" height="48" rx="4"/>
+          <rect class="bB" x="245" y="60" width="71" height="48" rx="4"/>
+          <rect class="bA" x="320" y="60" width="70" height="48" rx="4"/>
+          <rect class="bB" x="390" y="60" width="71" height="48" rx="4"/>
+          <rect class="bA" x="465" y="60" width="70" height="48" rx="4"/>
+          <rect class="bB" x="535" y="60" width="71" height="48" rx="4"/>
+
+          <text class="mono tA" x="65" y="90" text-anchor="middle">A</text>
+          <text class="mono tB" x="135" y="90" text-anchor="middle">B</text>
+          <text class="mono tA" x="210" y="90" text-anchor="middle">A</text>
+          <text class="mono tB" x="280" y="90" text-anchor="middle">B</text>
+          <text class="mono tA" x="355" y="90" text-anchor="middle">A</text>
+          <text class="mono tB" x="425" y="90" text-anchor="middle">B</text>
+          <text class="mono tA" x="500" y="90" text-anchor="middle">A</text>
+          <text class="mono tB" x="570" y="90" text-anchor="middle">B</text>
+
+          <text class="lb" x="65" y="128" text-anchor="middle">目标 r0</text>
+          <text class="lb" x="210" y="128" text-anchor="middle">目标 r1</text>
+          <text class="lb" x="355" y="128" text-anchor="middle">目标 r2</text>
+          <text class="lb" x="500" y="128" text-anchor="middle">目标 r3</text>
+
+          <line class="lSoft" x1="30" y1="148" x2="100" y2="148"/>
+          <line class="lSoft" x1="30" y1="143" x2="30" y2="153"/>
+          <line class="lSoft" x1="100" y1="143" x2="100" y2="153"/>
+          <text class="lb mono" x="65" y="168" text-anchor="middle">a = ρd</text>
+          <line class="lSoft" x1="100" y1="148" x2="171" y2="148"/>
+          <line class="lSoft" x1="171" y1="143" x2="171" y2="153"/>
+          <text class="lb mono" x="140" y="168" text-anchor="middle">b</text>
+
+          <text class="lb" x="240" y="168">← 每块都这样切，P 个块一共 Pa 个 A 字节、Pb 个 B 字节</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 4</b>　以 <code>P = 4</code> 示意。切分不是把整个输入一刀两断，而是<b>每个目标块各自切一刀</b>。</p>
+      </figure>
+
+      <div class="note">
+        <b>实现上的一点出入，但净效果等价。</b>代码是在每个 loop chunk 上做一次连续切分
+        （<code>dataOffset0 = processedCount·itemSize</code>、<code>dataOffset1 = dataOffset0 + currCountPart0·itemSize</code>），
+        而「按块切」的语义是由模板的 stride 索引还原出来的：
+        Intra0 用 <code>inputSliceStride = d</code>、<code>inputRepeatStride = d·M</code>，
+        Inter1 用 <code>inputSliceStride = d·M</code>、<code>inputRepeatStride = d</code>。
+        两者配合，跨轮累积起来正好覆盖每个块的 A 段和 B 段。
+      </div>
+
+      <div class="warn">
+        <div class="wp-title">别把 d 和 D 搞混</div>
+        ReduceScatter / AllReduce / AllGather 三个算子里，<code>dataCount_</code> 都是<b>每 rank 的输出 count</b>
+        （ReduceScatter 侧由 <code>param.DataDes.count = recvCount</code> 而来），
+        所以 <code>d = dataSize_ = dataCount_ × dataTypeSize_</code> 是「<b>一个</b>目标块」的长度，不是整个 tensor。
+        每 rank 的输入是 <code>P·d</code>；全部 <code>P</code> 个 rank 的输出加起来才是 <code>P·d</code>。
+      </div>
+    </section>
+
+    <!-- ================= 04 ================= -->
+    <section class="chapter" id="s4">
+      <div class="section-heading">
+        <div class="section-number">04</div>
+        <div>
+          <h2>ReduceScatter 的两阶段与流量账</h2>
+          <p>A 片先横着走，B 片先竖着走，然后各自换方向</p>
+        </div>
+      </div>
+
+      <p class="lead"><b>第一阶段：A 片在行内归约，B 片在列内归约。</b></p>
+      <ul>
+        <li><b>A 片，Intra0 = Mesh ReduceScatter。</b>同一行的 <code>M</code> 个 rank 归约，当前 rank 留下所有「目标列为 <code>i</code>」的部分结果，即目标 <code>(0,i)…(N−1,i)</code>，共 <code>Na</code> 字节。每份结果含本行 <code>M</code> 个源 rank 的贡献。</li>
+        <li><b>B 片，Inter1 = NHR ReduceScatter。</b>同一列的 <code>N</code> 个 rank 归约，当前 rank 留下所有「目标行为 <code>j</code>」的部分结果，即目标 <code>(j,0)…(j,M−1)</code>，共 <code>Mb</code> 字节。每份结果含本列 <code>N</code> 个源 rank 的贡献。</li>
+      </ul>
+
+      <p class="lead"><b>第二阶段：沿另一维继续归约，只留下本 rank 的目标块。</b></p>
+      <ul>
+        <li><b>A 片，Inter0 = NHR ReduceScatter。</b>把各行对相同目标的部分结果归约，留下本 rank 的 <code>a</code> 字节。</li>
+        <li><b>B 片，Intra1 = Mesh ReduceScatter。</b>把各列对相同目标的部分结果归约，留下本 rank 的 <code>b</code> 字节。</li>
+      </ul>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 680 345" role="img" aria-labelledby="t-f4 d-f4">
+          <title id="t-f4">ReduceScatter 两阶段流程</title>
+          <desc id="d-f4">A 片从 Pa 经 Mesh ReduceScatter 变成 Na，再经 NHR ReduceScatter 变成 a；B 片从 Pb 经 NHR ReduceScatter 变成 Mb，再经 Mesh ReduceScatter 变成 b。两阶段之间同步。</desc>
+
+          <line class="dashSoft" x1="390" y1="45" x2="390" y2="270"/>
+
+          <text class="lb" x="275" y="52" text-anchor="middle">阶段 1（两条路径并行）</text>
+          <text class="lb" x="505" y="52" text-anchor="middle">阶段 2（两条路径并行）</text>
+
+          <rect class="bA" x="105" y="85" width="110" height="54" rx="10"/>
+          <text class="mono tA" x="160" y="108" text-anchor="middle">Pa</text>
+          <text class="lb" x="160" y="126" text-anchor="middle">A 片合计</text>
+          <rect class="bA" x="335" y="85" width="110" height="54" rx="10"/>
+          <text class="mono tA" x="390" y="108" text-anchor="middle">Na</text>
+          <text class="lb" x="390" y="126" text-anchor="middle">按目标列</text>
+          <rect class="bOut" x="565" y="85" width="110" height="54" rx="10"/>
+          <text class="mono" x="620" y="108" text-anchor="middle" fill="#a96a17">a</text>
+          <text class="lb" x="620" y="126" text-anchor="middle">本 rank 的</text>
+
+          <line class="lMesh" x1="220" y1="112" x2="328" y2="112" marker-end="url(#mk-mesh)"/>
+          <text class="lb tMesh" x="274" y="100" text-anchor="middle">Mesh RS · Intra0</text>
+          <line class="lNhr" x1="450" y1="112" x2="558" y2="112" marker-end="url(#mk-nhr)"/>
+          <text class="lb tNhr" x="504" y="100" text-anchor="middle">NHR RS · Inter0</text>
+
+          <rect class="bB" x="105" y="215" width="110" height="54" rx="10"/>
+          <text class="mono tB" x="160" y="238" text-anchor="middle">Pb</text>
+          <text class="lb" x="160" y="256" text-anchor="middle">B 片合计</text>
+          <rect class="bB" x="335" y="215" width="110" height="54" rx="10"/>
+          <text class="mono tB" x="390" y="238" text-anchor="middle">Mb</text>
+          <text class="lb" x="390" y="256" text-anchor="middle">按目标行</text>
+          <rect class="bOut" x="565" y="215" width="110" height="54" rx="10"/>
+          <text class="mono" x="620" y="238" text-anchor="middle" fill="#a96a17">b</text>
+          <text class="lb" x="620" y="256" text-anchor="middle">本 rank 的</text>
+
+          <line class="lNhr" x1="220" y1="242" x2="328" y2="242" marker-end="url(#mk-nhr)"/>
+          <text class="lb tNhr" x="274" y="230" text-anchor="middle">NHR RS · Inter1</text>
+          <line class="lMesh" x1="450" y1="242" x2="558" y2="242" marker-end="url(#mk-mesh)"/>
+          <text class="lb tMesh" x="504" y="230" text-anchor="middle">Mesh RS · Intra1</text>
+
+          <text class="lb" x="390" y="300" text-anchor="middle" fill="#a96a17">阶段间同步（线程通知，不是网络屏障）</text>
+          <text class="lb" x="340" y="326" text-anchor="middle">最终输出：[归约后的 A ‖ 归约后的 B]，共 d 字节</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 5</b>　两条路径在同一阶段内并行，因此单阶段的耗时是两者的 <code>max</code>，不是相加。</p>
+      </figure>
+
+      <div class="note">
+        <b>「同步」同步的是什么？</b>是 <code>PreSyncInterThreads</code> / <code>PostSyncInterThreads</code>，
+        底层是控制线程与两个模板主线程之间的 <code>HcommThreadNotifyRecordOnThread</code> /
+        <code>HcommThreadNotifyWaitOnThread</code> —— <b>线程间的通知，不是网络屏障</b>。
+        它保证阶段 2 的两个模板不会在阶段 1 的数据就绪前启动；跨 rank 的数据可见性由通信语义本身保证。
+      </div>
+
+      <h3 class="sub">每阶段流量</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>阶段</th><th>操作</th><th>每 rank 有效数据变化</th><th class="num">每 rank 发送量</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><span class="tag-mesh">A 片 Mesh RS</span></td><td class="num">Pa → Na</td><td class="num">(M−1)·Na</td></tr>
+            <tr><td>1</td><td><span class="tag-nhr">B 片 NHR RS</span></td><td class="num">Pb → Mb</td><td class="num">(N−1)·Mb</td></tr>
+            <tr><td>2</td><td><span class="tag-nhr">A 片 NHR RS</span></td><td class="num">Na → a</td><td class="num">(N−1)·a</td></tr>
+            <tr><td>2</td><td><span class="tag-mesh">B 片 Mesh RS</span></td><td class="num">Mb → b</td><td class="num">(M−1)·b</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        第一阶段的放大倍数直接对应代码里的模板参数：<code>Intra0.repeatNum = N</code>（即 <code>rankSizeLevel1_</code>）、
+        <code>Inter1.repeatNum = M</code>（即 <code>rankSizeLevel0_</code>），第二阶段两者都是 <code>1</code>。
+        <code>TemplateDataParams::repeatNum</code> 就是「同一套收发要重复几遍」。
+      </p>
+
+      <div class="formula">
+        <span class="flabel">两个维度累计发送量（每 rank，单位字节）</span>
+        <div class="row">V<span class="hi">Mesh</span> = (M−1) · (Na + b)</div>
+        <div class="row">V<span class="hi">NHR</span>  = (N−1) · (Mb + a)</div>
+        <div class="row" style="margin-top:10px">V<span class="hi">RS</span> = V<span class="hi">Mesh</span> + V<span class="hi">NHR</span> = (P−1)·d = <span class="hi">(P−1)/P × 每 rank 输入量</span></div>
+      </div>
+
+      <p>
+        守恒可以展开验证：把 <code>Na = Nρd</code>、<code>Mb = M(1−ρ)d</code> 代入，
+        <code>ρ</code> 的系数项正负抵消，只剩 <code>(M−1) + M(N−1) = MN − 1 = P − 1</code>。
+        <b>换句话说：无论 ρ 取多少，总发送量恒定，ρ 只决定这笔流量在两个维度之间怎么分。</b>
+      </p>
+
+      <details>
+        <summary>M = N = 2 的 r0 走查</summary>
+        <div class="dc">
+          <p>第一阶段结束后，r0 手里是两份<b>部分</b>结果（都以本行 / 本列的贡献为初值）：</p>
+          <ul>
+            <li><b>A 片</b>（目标列 <code>i = 0</code>，即 r0 与 r2）：
+              <code>A_r0[r0] ⊕ A_r1[r0]</code>、<code>A_r0[r2] ⊕ A_r1[r2]</code>，共 <code>Na</code> 字节。</li>
+            <li><b>B 片</b>（目标行 <code>j = 0</code>，即 r0 与 r1）：
+              <code>B_r0[r0] ⊕ B_r2[r0]</code>、<code>B_r0[r1] ⊕ B_r2[r1]</code>，共 <code>Mb</code> 字节。</li>
+          </ul>
+          <p>
+            第二阶段：r0 从 <b>r2</b> 拿到目标 r0 的另一行 A 片贡献，从 <b>r1</b> 拿到目标 r0 的另一列 B 片贡献，
+            归约后拼成自己的完整输出 <code>[A ‖ B]</code>，正好 <code>d</code> 字节。
+          </p>
+          <p>把 <code>M = N = 2</code> 代进公式：<code>V_Mesh = (1)(2a + b) = 2ρd + (1−ρ)d</code>，
+            <code>V_NHR = (1)(2b + a) = 2(1−ρ)d + ρd</code>，两者相加 <code>= 3d = (P−1)d</code> ✓</p>
+        </div>
+      </details>
+
+      <p class="note">
+        表里的「有效数据」指<b>后续仍需处理的结果量</b>。原始 input 和 scratch 里的旧数据不一定被清除 ——
+        别把它当成内存回收。
+      </p>
+    </section>
+
+    <!-- ================= 05 ================= -->
+    <section class="chapter" id="s5">
+      <div class="section-heading">
+        <div class="section-number">05</div>
+        <div>
+          <h2>AllReduce：RS → RS → AG → AG</h2>
+          <p>前两阶段归约并散开，后两阶段把结果收回来</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        AllReduce 每 rank 输入输出都是 <code>S</code> 字节（当前循环内）。<b>这里的口径和 ReduceScatter 不同</b>：
+        <code>A = ρS</code>、<code>B = (1−ρ)S</code> 是<b>整个输入区域</b>的两段连续数据，
+        而不是「每个目标块内部」的切分 —— <code>S</code> 本身就等于 <code>P·d</code>。
+      </p>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 720 340" role="img" aria-labelledby="t-f5 d-f5">
+          <title id="t-f5">AllReduce 四阶段调度</title>
+          <desc id="d-f5">A 片依次经过 Mesh ReduceScatter、NHR ReduceScatter、NHR AllGather、Mesh AllGather；B 片依次经过 NHR ReduceScatter、Mesh ReduceScatter、Mesh AllGather、NHR AllGather。每阶段两条路径并行，阶段间同步。</desc>
+
+          <text class="lb" x="195" y="45" text-anchor="middle">阶段 1</text>
+          <text class="lb" x="313" y="45" text-anchor="middle">阶段 2</text>
+          <text class="lb" x="431" y="45" text-anchor="middle">阶段 3</text>
+          <text class="lb" x="549" y="45" text-anchor="middle">阶段 4</text>
+
+          <text class="mono tA" x="60" y="106" text-anchor="middle">A 片</text>
+          <rect class="bA" x="100" y="76" width="76" height="56" rx="10"/>
+          <text class="mono tA" x="138" y="110" text-anchor="middle">A</text>
+          <rect class="bA" x="218" y="76" width="76" height="56" rx="10"/>
+          <text class="mono tA" x="256" y="110" text-anchor="middle">A/M</text>
+          <rect class="bA" x="336" y="76" width="76" height="56" rx="10"/>
+          <text class="mono tA" x="374" y="110" text-anchor="middle">A/P</text>
+          <rect class="bA" x="454" y="76" width="76" height="56" rx="10"/>
+          <text class="mono tA" x="492" y="110" text-anchor="middle">A/M</text>
+          <rect class="bOut" x="572" y="76" width="76" height="56" rx="10"/>
+          <text class="mono" x="610" y="110" text-anchor="middle" fill="#a96a17">A</text>
+
+          <line class="lMesh" x1="180" y1="104" x2="212" y2="104" marker-end="url(#mk-mesh)"/>
+          <text class="lb tMesh" x="196" y="94" text-anchor="middle">Mesh RS</text>
+          <line class="lNhr" x1="298" y1="104" x2="330" y2="104" marker-end="url(#mk-nhr)"/>
+          <text class="lb tNhr" x="314" y="94" text-anchor="middle">NHR RS</text>
+          <line class="lNhr" x1="416" y1="104" x2="448" y2="104" marker-end="url(#mk-nhr)"/>
+          <text class="lb tNhr" x="432" y="94" text-anchor="middle">NHR AG</text>
+          <line class="lMesh" x1="534" y1="104" x2="566" y2="104" marker-end="url(#mk-mesh)"/>
+          <text class="lb tMesh" x="550" y="94" text-anchor="middle">Mesh AG</text>
+
+          <text class="mono tB" x="60" y="260" text-anchor="middle">B 片</text>
+          <rect class="bB" x="100" y="230" width="76" height="56" rx="10"/>
+          <text class="mono tB" x="138" y="264" text-anchor="middle">B</text>
+          <rect class="bB" x="218" y="230" width="76" height="56" rx="10"/>
+          <text class="mono tB" x="256" y="264" text-anchor="middle">B/N</text>
+          <rect class="bB" x="336" y="230" width="76" height="56" rx="10"/>
+          <text class="mono tB" x="374" y="264" text-anchor="middle">B/P</text>
+          <rect class="bB" x="454" y="230" width="76" height="56" rx="10"/>
+          <text class="mono tB" x="492" y="264" text-anchor="middle">B/N</text>
+          <rect class="bOut" x="572" y="230" width="76" height="56" rx="10"/>
+          <text class="mono" x="610" y="264" text-anchor="middle" fill="#a96a17">B</text>
+
+          <line class="lNhr" x1="180" y1="258" x2="212" y2="258" marker-end="url(#mk-nhr)"/>
+          <text class="lb tNhr" x="196" y="248" text-anchor="middle">NHR RS</text>
+          <line class="lMesh" x1="298" y1="258" x2="330" y2="258" marker-end="url(#mk-mesh)"/>
+          <text class="lb tMesh" x="314" y="248" text-anchor="middle">Mesh RS</text>
+          <line class="lMesh" x1="416" y1="258" x2="448" y2="258" marker-end="url(#mk-mesh)"/>
+          <text class="lb tMesh" x="432" y="248" text-anchor="middle">Mesh AG</text>
+          <line class="lNhr" x1="534" y1="258" x2="566" y2="258" marker-end="url(#mk-nhr)"/>
+          <text class="lb tNhr" x="550" y="248" text-anchor="middle">NHR AG</text>
+
+          <line class="lSoft" x1="70" y1="172" x2="660" y2="172" stroke-dasharray="4 4"/>
+          <text class="lb" x="364" y="190" text-anchor="middle">阶段 2 结束时，归约已经完成 —— 阶段 3、4 只负责传播</text>
+          <text class="lb" x="360" y="318" text-anchor="middle">注意 A 片与 B 片的 AG 顺序，恰好都是各自 RS 顺序的反向</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 6</b>　四个阶段串行、每阶段内两条路径并行。阶段 2 之后每份数据都已是全局归约结果，只是还分布在不同 rank 上。</p>
+      </figure>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>阶段</th><th>A 片路径</th><th>B 片路径</th><th>此时数据包含的贡献</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><span class="tag-mesh">Mesh RS</span> → <code>A/M</code></td><td><span class="tag-nhr">NHR RS</span> → <code>B/N</code></td><td>A 含本<b>行</b>贡献；B 含本<b>列</b>贡献</td></tr>
+            <tr><td>2</td><td><span class="tag-nhr">NHR RS</span> → <code>A/P</code></td><td><span class="tag-mesh">Mesh RS</span> → <code>B/P</code></td><td>每份留下的数据均已完成<b>全局归约</b></td></tr>
+            <tr><td>3</td><td><span class="tag-nhr">NHR AG</span> → <code>A/M</code></td><td><span class="tag-mesh">Mesh AG</span> → <code>B/N</code></td><td>传播已归约的结果</td></tr>
+            <tr><td>4</td><td><span class="tag-mesh">Mesh AG</span> → <code>A</code></td><td><span class="tag-nhr">NHR AG</span> → <code>B</code></td><td>每 rank 获得完整 AllReduce 结果</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">每阶段流量</h3>
+      <p>以下按均匀分片计算；实际尾片要用源码的 <code>sliceSize</code> / <code>tailSize</code>，见 §9。</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>阶段</th><th class="num">Mesh 每 rank 发送量</th><th class="num">NHR 每 rank 发送量</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1 · 第一次 RS</td><td class="num">(M−1)·A/M</td><td class="num">(N−1)·B/N</td></tr>
+            <tr><td>2 · 第二次 RS</td><td class="num">(M−1)·B/P</td><td class="num">(N−1)·A/P</td></tr>
+            <tr><td>3 · 第一次 AG</td><td class="num">(M−1)·B/P</td><td class="num">(N−1)·A/P</td></tr>
+            <tr><td>4 · 第二次 AG</td><td class="num">(M−1)·A/M</td><td class="num">(N−1)·B/N</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="formula">
+        <span class="flabel">AllReduce 每 rank 累计发送量</span>
+        <div class="row">V<span class="hi">Mesh</span> = 2(M−1) · (A/M + B/P)</div>
+        <div class="row">V<span class="hi">NHR</span>  = 2(N−1) · (B/N + A/P)</div>
+        <div class="row" style="margin-top:10px">V<span class="hi">AR</span> = <span class="hi">2 · (P−1)/P × S</span></div>
+      </div>
+
+      <p>
+        同样可以把 <code>ρ</code> 消掉：把 <code>A = ρS</code>、<code>B = (1−ρ)S</code> 代入后，
+        <code>ρ</code> 的两个系数都等于 <code>(P−1)/P</code>，而它们的权重之和是 <code>ρ + (1−ρ) = 1</code>，
+        所以总量与 ρ 无关。这也解释了为什么 AllReduce 的流量正好是 ReduceScatter 的 <b>2 倍</b>：
+        <code>2(P−1)/P·S</code> 而 RS 是 <code>(P−1)/P·S</code> —— 一次归约 + 一次收集。
+      </p>
+    </section>
+
+    <!-- ================= 06 ================= -->
+    <section class="chapter" id="s6">
+      <div class="section-heading">
+        <div class="section-number">06</div>
+        <div>
+          <h2>分片所有权：路径决定布局</h2>
+          <p>阶段 2 结束后，谁手上拿着哪一块？</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        AllReduce 内部的分片所有权由<b>路径</b>决定。在均匀切分下，对 rank <code>(j,i)</code>：
+      </p>
+      <ul>
+        <li><b>A 片</b>先按 <code>M</code> 分块、再按 <code>N</code> 分块，所以 <code>(j,i)</code> 持有 A 片的第 <code>i·N + j</code> 个小块。</li>
+        <li><b>B 片</b>先按 <code>N</code> 分块、再按 <code>M</code> 分块，所以 <code>(j,i)</code> 持有 B 片的第 <code>j·M + i</code> 个小块。</li>
+      </ul>
+      <p>
+        源码里就是两个一眼能看懂的函数：<code>CalcRankIdInter(i,j,part2) = i·part2 + j</code>（A 的映射）、
+        <code>CalcRankIdIntra(i,j,part1) = j·part1 + i</code>（B 的映射）。
+      </p>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 640 310" role="img" aria-labelledby="t-f6 d-f6">
+          <title id="t-f6">M=N=2 时阶段 2 结束后的分片所有权</title>
+          <desc id="d-f6">A 片按 M 再按 N 分块，B 片按 N 再按 M 分块，四个 rank 各自持有一块 A 和一块 B。</desc>
+
+          <text class="ttl" x="60" y="34">A 片：先按 M 分块，再按 N 分块</text>
+          <rect class="bA" x="60" y="50" width="128" height="42" rx="4"/>
+          <rect class="bA" x="190" y="50" width="128" height="42" rx="4"/>
+          <rect class="bA" x="320" y="50" width="128" height="42" rx="4"/>
+          <rect class="bA" x="450" y="50" width="128" height="42" rx="4"/>
+          <text class="mono tA" x="124" y="77" text-anchor="middle">A₀</text>
+          <text class="mono tA" x="254" y="77" text-anchor="middle">A₁</text>
+          <text class="mono tA" x="384" y="77" text-anchor="middle">A₂</text>
+          <text class="mono tA" x="514" y="77" text-anchor="middle">A₃</text>
+          <text class="lb" x="124" y="112" text-anchor="middle">r0</text>
+          <text class="lb" x="254" y="112" text-anchor="middle">r2</text>
+          <text class="lb" x="384" y="112" text-anchor="middle">r1</text>
+          <text class="lb" x="514" y="112" text-anchor="middle">r3</text>
+
+          <text class="ttl" x="60" y="166">B 片：先按 N 分块，再按 M 分块</text>
+          <rect class="bB" x="60" y="182" width="128" height="42" rx="4"/>
+          <rect class="bB" x="190" y="182" width="128" height="42" rx="4"/>
+          <rect class="bB" x="320" y="182" width="128" height="42" rx="4"/>
+          <rect class="bB" x="450" y="182" width="128" height="42" rx="4"/>
+          <text class="mono tB" x="124" y="209" text-anchor="middle">B₀</text>
+          <text class="mono tB" x="254" y="209" text-anchor="middle">B₁</text>
+          <text class="mono tB" x="384" y="209" text-anchor="middle">B₂</text>
+          <text class="mono tB" x="514" y="209" text-anchor="middle">B₃</text>
+          <text class="lb" x="124" y="244" text-anchor="middle">r0</text>
+          <text class="lb" x="254" y="244" text-anchor="middle">r1</text>
+          <text class="lb" x="384" y="244" text-anchor="middle">r2</text>
+          <text class="lb" x="514" y="244" text-anchor="middle">r3</text>
+
+          <text class="lb" x="60" y="286">于是阶段 2 结束后：r0 持有 (A₀, B₀)，r1 持有 (A₂, B₁)，r2 持有 (A₁, B₂)，r3 持有 (A₃, B₃)。</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 7</b>　下标表示各区域内的连续小块编号。归约虽然完成了，但结果仍然分散 —— 这正是后两个 AG 阶段存在的理由。</p>
+      </figure>
+
+      <p>
+        随后 r0 先通过列内 <span class="tag-nhr">NHR</span> 收齐 <code>(A₀, A₁)</code>、
+        通过行内 <span class="tag-mesh">Mesh</span> 收齐 <code>(B₀, B₁)</code>，
+        最后再沿另一维收齐完整 A、B。这个映射来自 <code>FillDataMap</code> 与两个 <code>CalcRankId*</code> 函数。
+      </p>
+    </section>
+
+    <!-- ================= 07 ================= -->
+    <section class="chapter" id="s7">
+      <div class="section-heading">
+        <div class="section-number">07</div>
+        <div>
+          <h2>归约发生在哪里</h2>
+          <p>两个算子复用同一组 ReduceScatter 模板，但两条路径的归约方式完全不同</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        这是性能建模时最容易漏掉的一块：<b>网络流量不是全部成本</b>。Mesh 路径有明确的本地归约开销，
+        NHR 路径则有逐轮的收发 + 归约开销。
+      </p>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 680 320" role="img" aria-labelledby="t-f7 d-f7">
+          <title id="t-f7">Mesh 与 NHR 两条路径的归约机制</title>
+          <desc id="d-f7">Mesh 路径把分片写进对端 CCL buffer，接收端先搬运自己的贡献再从 buffer 叠加；NHR 路径逐轮收发并将收到的贡献就地归约进部分结果。</desc>
+
+          <rect class="bGray" x="20" y="30" width="310" height="270" rx="12"/>
+          <text class="ttl tMesh" x="175" y="60" text-anchor="middle">Mesh：写远端 + 本地规约</text>
+          <text x="40" y="96">① 每个 rank 把「归其他 rank 负责」的分片</text>
+          <text x="40" y="118">　 直接写进<b>对端的 CCL buffer</b>（按发送者</text>
+          <text x="40" y="140">　 rank 索引槽位）</text>
+          <text class="mono lb" x="40" y="162">　 SendRecvBatchWrite</text>
+          <text x="40" y="196">② 对端：先 LocalCopy 把自己的贡献</text>
+          <text x="40" y="218">　 从 input 搬到 output，作为<b>归约初值</b></text>
+          <text x="40" y="252">③ 再 LocalReduce，把各对端分片叠上去</text>
+          <text class="lb" x="40" y="280">→ 无本地预拷贝，input 直接写向对端</text>
+
+          <rect class="bGray" x="350" y="30" width="310" height="270" rx="12"/>
+          <text class="ttl tNhr" x="505" y="60" text-anchor="middle">NHR：逐轮收发 + 就地规约</text>
+          <text x="370" y="96">① 第 s 轮：与距离 2^s 的对端做收发</text>
+          <text class="mono lb" x="370" y="118">　 SendRecv…Reduce</text>
+          <text x="370" y="152">② 收到即 Reduce 进本地部分结果</text>
+          <text x="370" y="186">③ 下一轮把「部分归约结果」继续发出去</text>
+          <text x="370" y="220">④ 走完 ⌈log₂N⌉ 轮后，每份结果都集齐</text>
+          <text x="370" y="242">　 了全部 N 个源的贡献</text>
+          <text class="lb" x="370" y="280">→ 有本地预拷贝：input → CCL buffer → output</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 8</b>　Mesh 的「写远端」避免了本地预拷贝，但把归约成本推到了接收端；NHR 的每轮都在做增量归约。</p>
+      </figure>
+
+      <details>
+        <summary>对称内存路径（symmetric memory）会走另一套</summary>
+        <div class="dc">
+          <p>
+            开启 <code>supportSymmetricMemory</code> 后，归约直接在 <code>input</code> 上<b>就地</b>进行
+            （mesh 用 <code>SendRecvBatchReadReduce</code>、NHR 用 <code>SendRecvBatchReadReduce</code> 读对端窗口 + 就地归约），
+            省掉「写对端 buffer」和「本地预拷贝」两次搬运。
+          </p>
+          <p>AllReduce 在此基础上，阶段 2 与阶段 3 之间还有一次 <code>LocalCopy</code>：
+            把本 rank 的归约结果从 <code>input</code> 搬到 <code>output</code>，供两个 AllGather 阶段使用；
+            AG 阶段的 <code>outBuffType</code> 是 <code>OUTPUT</code> 并打开 <code>enableRemoteMemAccess</code>，直接读对端的 output 窗口。</p>
+          <p>
+            <b>顺带一个副产品：</b>对称内存路径下 <code>sliceCount = dataCount_</code>，<b>不进入分循环</b>，
+            一次做完 —— 这也是它和普通路径在性能模型上最大的差别之一。
+          </p>
+        </div>
+      </details>
+
+      <h3 class="sub">普通 buffer 路径的数据演进</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>算子</th><th>数据演进</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ReduceScatter</td><td class="num">input → CCL buffer → output</td></tr>
+            <tr><td>AllReduce</td><td class="num">input → CCL buffer → CCL buffer → CCL buffer → output</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        AllReduce 中间那三段 CCL buffer 正好对应阶段 1/2/3 的产物；只有最后一个 AG 阶段把结果落到 output。
+        Scratch 的偏移也有讲究（A 在 offset 0、B 在不同 <code>multiple</code> 偏移），见 §10 的自测清单。
+      </p>
+    </section>
+
+    <!-- ================= 08 ================= -->
+    <section class="chapter" id="s8">
+      <div class="section-heading">
+        <div class="section-number">08</div>
+        <div>
+          <h2>NHR 逐轮：ReduceScatter 与 AllGather 互为镜像</h2>
+          <p>同一个 NHR，两个方向，公式上下标正好对调</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        对于 <code>N</code> 个参与 rank 的 NHR <b>ReduceScatter</b>，第 <code>s</code> 轮（<code>s</code> 从 0 开始）：
+      </p>
+
+      <div class="formula">
+        <span class="flabel">NHR ReduceScatter · 第 s 轮</span>
+        <div class="row">Δ<span class="hi">s</span> = 2<sup>s</sup>　　sendTo = (j − Δ<span class="hi">s</span> + N) mod N　　recvFrom = (j + Δ<span class="hi">s</span>) mod N</div>
+        <div class="row">发送份数　q<span class="hi">s</span> = ⌊ (N − 1 + 2<sup>s</sup>) / 2<sup>s+1</sup> ⌋</div>
+        <div class="row" style="margin-top:10px">每轮发送量　V<span class="hi">s</span> = q<span class="hi">s</span> · R · z　　（R = repeatNum，z = 单份大小）</div>
+      </div>
+
+      <p>
+        而 NHR <b>AllGather</b> 是它的镜像：距离顺序反过来（从 <code>2<sup>K−1</sup></code> 递减到 1），
+        收发方向也对调。
+      </p>
+
+      <div class="formula">
+        <span class="flabel">NHR AllGather · 第 s 轮</span>
+        <div class="row">Δ<span class="hi">s</span> = 2<sup>K−1−s</sup>　　sendTo = (j + Δ<span class="hi">s</span>) mod N　　recvFrom = (j − Δ<span class="hi">s</span> + N) mod N</div>
+        <div class="row">发送份数　q<span class="hi">s</span> = ⌊ (N − 1 + Δ<span class="hi">s</span>) / (2Δ<span class="hi">s</span>) ⌋</div>
+      </div>
+
+      <figure class="figure">
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 700 345" role="img" aria-labelledby="t-f8 d-f8">
+          <title id="t-f8">N=8 时 NHR ReduceScatter 与 AllGather 的逐轮镜像关系</title>
+          <desc id="d-f8">ReduceScatter 以距离 1、2、4 向后发送，份数为 4、2、1；AllGather 以距离 4、2、1 向前发送，份数为 1、2、4。</desc>
+
+          <text class="lb" x="70" y="30" text-anchor="end">NHR ReduceScatter</text>
+
+          <polyline class="lNhr" points="70,158 70,140 574,140 574,158" marker-end="url(#mk-nhr)"/>
+          <text class="lb" x="80" y="132">s=0　Δ=1 → r7　发 4 份</text>
+          <polyline class="lNhr" points="70,158 70,100 502,100 502,158" marker-end="url(#mk-nhr)"/>
+          <text class="lb" x="80" y="92">s=1　Δ=2 → r6　发 2 份</text>
+          <polyline class="lNhr" points="70,158 70,60 358,60 358,158" marker-end="url(#mk-nhr)"/>
+          <text class="lb" x="80" y="52">s=2　Δ=4 → r4　发 1 份</text>
+
+          <circle class="box" cx="70" cy="180" r="22"/>
+          <text class="mono" x="70" y="185" text-anchor="middle">0</text>
+          <circle class="box" cx="142" cy="180" r="22"/>
+          <text class="mono" x="142" y="185" text-anchor="middle">1</text>
+          <circle class="box" cx="214" cy="180" r="22"/>
+          <text class="mono" x="214" y="185" text-anchor="middle">2</text>
+          <circle class="box" cx="286" cy="180" r="22"/>
+          <text class="mono" x="286" y="185" text-anchor="middle">3</text>
+          <circle class="box" cx="358" cy="180" r="22"/>
+          <text class="mono" x="358" y="185" text-anchor="middle">4</text>
+          <circle class="box" cx="430" cy="180" r="22"/>
+          <text class="mono" x="430" y="185" text-anchor="middle">5</text>
+          <circle class="box" cx="502" cy="180" r="22"/>
+          <text class="mono" x="502" y="185" text-anchor="middle">6</text>
+          <circle class="box" cx="574" cy="180" r="22"/>
+          <text class="mono" x="574" y="185" text-anchor="middle">7</text>
+          <text class="lb" x="620" y="185">rank</text>
+
+          <polyline class="lMesh" points="70,202 70,220 358,220 358,202" marker-end="url(#mk-mesh)"/>
+          <text class="lb" x="80" y="238">s=0　Δ=4 → r4　发 1 份</text>
+          <polyline class="lMesh" points="70,202 70,258 214,258 214,202" marker-end="url(#mk-mesh)"/>
+          <text class="lb" x="80" y="276">s=1　Δ=2 → r2　发 2 份</text>
+          <polyline class="lMesh" points="70,202 70,296 142,296 142,202" marker-end="url(#mk-mesh)"/>
+          <text class="lb" x="80" y="314">s=2　Δ=1 → r1　发 4 份</text>
+
+          <text class="lb" x="70" y="338" text-anchor="end">NHR AllGather</text>
+          <text class="lb" x="360" y="338" text-anchor="middle">两条路径累计都传 N−1 = 7 份：RS 逐轮合并贡献，AG 逐轮扩散结果</text>
+        </svg>
+        </div>
+        <p class="figcap"><b>图 9</b>　以 <code>j = 0</code>、<code>N = 8</code> 为例。RS 的距离序列是 <code>(1,2,4)</code>、份数 <code>(4,2,1)</code>；AG 正好反过来。</p>
+      </figure>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>模板</th><th class="num">通信距离顺序</th><th class="num">每轮发送份数</th><th class="num">累计份数</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>NHR ReduceScatter</td><td class="num">1, 2, 4</td><td class="num">4, 2, 1</td><td class="num">7</td></tr>
+            <tr><td>NHR AllGather</td><td class="num">4, 2, 1</td><td class="num">1, 2, 4</td><td class="num">7</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="warn">
+        <div class="wp-title">轮数是 ⌈log₂N⌉，不是 log₂N</div>
+        源码用 <code>GetNHRStepNum(N)</code> 计算轮数，它数的是 <code>N−1</code> 的二进制位数，即 <b><code>⌈log₂N⌉</code></b>。
+        只有 <code>N</code> 是 2 的幂时两者才相等。反例：<code>N = 5</code> 时是 3 轮，份数序列 <code>(2,1,1)</code>，
+        每轮至少发 1 份，累计仍是 <code>Σq<sub>s</sub> = N−1 = 4</code>。
+      </div>
+    </section>
+
+    <!-- ================= 09 ================= -->
+    <section class="chapter" id="s9">
+      <div class="section-heading">
+        <div class="section-number">09</div>
+        <div>
+          <h2>时间模型与开销清单</h2>
+          <p>ρ 不改变总量，那它到底在调什么？</p>
+        </div>
+      </div>
+
+      <p class="lead">
+        既然总量与 <code>ρ</code> 无关，调 <code>ρ</code> 的唯一目的就是<b>让两个维度的并行阶段耗时尽量相等</b> ——
+        每个阶段的耗时是 <code>max(mesh, nhr)</code>，一方闲着就是纯浪费。
+      </p>
+
+      <div class="formula">
+        <span class="flabel">ReduceScatter（两阶段串行）</span>
+        <div class="row">T ≈ max( T<span class="hi">Mesh</span>((M−1)Na), T<span class="hi">NHR</span>((N−1)Mb) )</div>
+        <div class="row">　+ max( T<span class="hi">NHR</span>((N−1)a), T<span class="hi">Mesh</span>((M−1)b) ) + T<span class="hi">sync</span></div>
+      </div>
+
+      <div class="formula">
+        <span class="flabel">AllReduce（四阶段串行，每阶段两条路径并行）</span>
+        <div class="row">T ≈ <b>Σ</b><sub>k=1..4</sub> max( T<span class="hi">Mesh</span>(stage k), T<span class="hi">NHR</span>(stage k) ) + 3·T<span class="hi">sync</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="mini-label">INTERACTIVE · 切分比例</div>
+            <h3>拖动 ρ，看流量在两个维度之间怎么分</h3>
+          </div>
+          <span class="pill" id="rs-pill">单位见下方读数</span>
+        </div>
+        <div class="controls">
+          <label>Level 0 · M
+            <select id="sel-m">
+              <option value="2">2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </label>
+          <label>Level 1 · N
+            <select id="sel-n">
+              <option value="2">2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </label>
+          <label>算法
+            <select id="sel-alg">
+              <option value="rs">ReduceScatter</option>
+              <option value="ar">AllReduce</option>
+            </select>
+          </label>
+          <div class="rho-wrap">
+            <label>
+              <span class="rho-head"><span>ρ · 先 Mesh 的比例</span><output id="out-rho">0.50</output></span>
+              <input type="range" id="rng-rho" min="0" max="1" step="0.01" value="0.5">
+            </label>
+          </div>
+        </div>
+
+        <div class="diagram-scroll">
+        <svg class="dg" viewBox="0 0 640 300" role="img" aria-labelledby="t-f9 d-f9">
+          <title id="t-f9">各维度发送量占总量的比例随 rho 变化</title>
+          <desc id="d-f9">横轴为 rho，纵轴为占总发送量的比例。Mesh 曲线随 rho 上升，NHR 曲线随 rho 下降，两者在总量平衡点相交于 0.5。</desc>
+
+          <line class="lSoft" x1="70" y1="240" x2="610" y2="240"/>
+          <line class="lSoft" x1="70" y1="30" x2="70" y2="240"/>
+          <line class="dashSoft" x1="70" y1="135" x2="610" y2="135"/>
+
+          <text class="lb" x="62" y="244" text-anchor="end">0</text>
+          <text class="lb" x="62" y="139" text-anchor="end">0.5</text>
+          <text class="lb" x="62" y="34" text-anchor="end">1</text>
+          <text class="lb" x="70" y="262" text-anchor="middle">0</text>
+          <text class="lb" x="205" y="262" text-anchor="middle">0.25</text>
+          <text class="lb" x="340" y="262" text-anchor="middle">0.5</text>
+          <text class="lb" x="475" y="262" text-anchor="middle">0.75</text>
+          <text class="lb" x="610" y="262" text-anchor="middle">1</text>
+          <text class="lb" x="340" y="284" text-anchor="middle">ρ（先 Mesh 的比例）</text>
+          <text class="lb" x="24" y="135" text-anchor="middle" transform="rotate(-90 24 135)">占总发送量的比例</text>
+
+          <polyline id="tf-mesh" class="lMesh" points="" stroke-width="2.4"/>
+          <polyline id="tf-nhr" class="lNhr" points="" stroke-width="2.4"/>
+
+          <circle id="tf-cross" cx="340" cy="135" r="6" fill="#a96a17"/>
+          <line id="tf-cross-gd" class="dash" x1="340" y1="135" x2="340" y2="240"/>
+          <text id="tf-cross-lb" class="lb" x="340" y="120" text-anchor="middle" fill="#a96a17">均衡点</text>
+
+          <line id="tf-t1" class="lSoft" x1="205" y1="240" x2="205" y2="248" stroke="#a96a17" stroke-width="2"/>
+          <line id="tf-t2" class="lSoft" x1="205" y1="240" x2="205" y2="248" stroke="#a96a17" stroke-width="2"/>
+          <text id="tf-t1-lb" class="lb sm" x="205" y="274" text-anchor="middle" fill="#a96a17">ρ₁</text>
+          <text id="tf-t2-lb" class="lb sm" x="205" y="274" text-anchor="middle" fill="#a96a17">ρ₂</text>
+
+          <circle cx="88" cy="288" r="4" fill="#6255ce"/>
+          <text class="lb" x="98" y="292">Mesh 占比</text>
+          <circle cx="196" cy="288" r="4" fill="#117b70"/>
+          <text class="lb" x="206" y="292">NHR 占比</text>
+        </svg>
+        </div>
+
+        <div class="readout">
+          <div><small id="lb-mesh">Mesh 发送量</small><strong class="c-mesh" id="val-mesh">—</strong></div>
+          <div><small id="lb-nhr">NHR 发送量</small><strong class="c-nhr" id="val-nhr">—</strong></div>
+          <div><small id="lb-sum">总发送量（与 ρ 无关）</small><strong class="c-sum" id="val-sum">—</strong></div>
+        </div>
+        <div class="verdict" id="verdict">—</div>
+      </div>
+
+      <div class="derive">
+        <div class="dp-title">本文推导：三个「平衡点」并不重合</div>
+        <p>设两个维度带宽相同，令 Mesh 与 NHR 的<b>总量</b>相等，解出（三个算子形式完全一致）：</p>
+        <p><code>ρ* = (MN − 2M + 1) / [ 2(M−1)(N−1) ]</code>，当且仅当 <code>M = N</code> 时等于 0.5。</p>
+        <p>但真正决定耗时的是<b>每个阶段内部</b>的 max，于是还有两个分阶段平衡点：</p>
+        <p><code>ρ₁ = M(N−1) / [ N(M−1) + M(N−1) ]</code>（阶段 1：Na 对 Mb）<br>
+           <code>ρ₂ = (M−1) / [ (M−1) + (N−1) ]</code>（阶段 2：b 对 a）</p>
+        <p>
+          三者只有在 <code>M = N</code> 时才同时等于 0.5。
+          以 <code>M=2, N=8</code> 为例：<code>ρ₁ ≈ 0.64</code>、<code>ρ₂ = 0.125</code>、<code>ρ* ≈ 0.93</code> ——
+          <b>没有一个 ρ 能同时把两个阶段都配平</b>，这也是源码最终改用端口带宽公式而非定值的原因。
+        </p>
+        <p class="note">以上是等带宽下的理想化推导，仅用于理解「ρ 在权衡什么」；实际取值以 <code>CalcParallelDataSplitRatio</code> 为准。</p>
+      </div>
+
+      <h3 class="sub">性能模型需要单列的本地开销</h3>
+      <div class="keypoints">
+        <div class="kp-title">网络流量之外，还有这些</div>
+        <ul>
+          <li><b>本地拷贝</b> —— 普通路径的 input → CCL buffer、CCL buffer → output；对称内存路径的 input → output。</li>
+          <li><b>Mesh 本地归约</b> —— 接收端的 <code>LocalCopy</code> + <code>LocalReduce</code>，量级与收到的分片量同阶。</li>
+          <li><b>NHR 逐轮归约</b> —— 每轮都要把收到的分片 Reduce 进部分结果，共 <code>⌈log₂N⌉</code> 轮。</li>
+          <li><b>阶段同步</b> —— ReduceScatter 1 次、AllReduce 3 次，量级不大但在小包场景不可忽略。</li>
+          <li><b>非均匀尾片</b> —— <code>sliceSize</code> / <code>tailSize</code> 使各 rank 的实际数据量略有差异，末位 rank 可能更大。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 10 ================= -->
+    <section class="chapter" id="s10">
+      <div class="section-heading">
+        <div class="section-number">10</div>
+        <div>
+          <h2>代码地图与自测</h2>
+          <p>注册方式、关键行号、以及可以自己动手验算的清单</p>
+        </div>
+      </div>
+
+      <h3 class="sub">先分清「算法名」和「执行器类」</h3>
+      <p>
+        <code>AicpuReduceScatterParallelMeshNHR</code> 和 <code>AicpuAllReduceParallelMeshNHR</code>
+        都是<b>算法名字符串</b>（selector 选出来的就是它们），不是类名。
+        真正的执行器类模板是 <code>InsReduceScatterParallelExecutor</code> / <code>InsAllReduceParallelExecutor</code>。
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>项目</th><th>ReduceScatter</th><th>AllReduce</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>算法名</td><td class="num">AicpuReduceScatterParallelMeshNHR</td><td class="num">AicpuAllReduceParallelMeshNHR</td></tr>
+            <tr><td>执行器类</td><td class="num">InsReduceScatterParallelExecutor</td><td class="num">InsAllReduceParallelExecutor</td></tr>
+            <tr><td>注册宏</td><td class="num">REGISTER_EXECUTOR_BY_TWO_TEMPS</td><td class="num">REGISTER_EXECUTOR_BY_FOUR_TEMPS</td></tr>
+            <tr><td>模板参数个数</td><td class="num">2</td><td class="num">4</td></tr>
+            <tr><td>拓扑匹配器</td><td class="num">TopoMatchTwoLevel</td><td class="num">TopoMatchTwoLevel</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><b>ReduceScatter 的注册</b>（<code>ins_reduce_scatter_parallel_executor.cc:823</code>）：</p>
+      <pre><span class="c">#if CANN_VERSION_NUM &gt;= CANN_VERSION(9, 0, 0)</span>
+<span class="k">REGISTER_EXECUTOR_BY_TWO_TEMPS</span>(
+    HcclCMDType::HCCL_CMD_REDUCE_SCATTER,
+    <span class="s">AicpuReduceScatterParallelMeshNHR</span>,   <span class="c">// ← 算法名（字符串）</span>
+    InsReduceScatterParallelExecutor,      <span class="c">// ← 执行器类模板</span>
+    TopoMatchTwoLevel,                     <span class="c">// ← 拓扑匹配器</span>
+    InsTempReduceScatterMesh1D,            <span class="c">// ← 模板 0：管 Level 0（Mesh）</span>
+    InsTempReduceScatterNHR);              <span class="c">// ← 模板 1：管 Level 1（NHR）</span>
+<span class="c">#endif</span></pre>
+
+      <p><b>AllReduce 的注册</b>（<code>ins_v2_all_reduce_parallel_executor.cc:1566</code>）—— 注意是四个模板：</p>
+      <pre><span class="c">#if CANN_VERSION_NUM &gt;= CANN_VERSION(9, 0, 0)</span>
+<span class="k">REGISTER_EXECUTOR_BY_FOUR_TEMPS</span>(
+    HcclCMDType::HCCL_CMD_ALLREDUCE,
+    <span class="s">AicpuAllReduceParallelMeshNHR</span>,       <span class="c">// ← 算法名（字符串）</span>
+    InsAllReduceParallelExecutor,          <span class="c">// ← 执行器类模板</span>
+    TopoMatchTwoLevel,                     <span class="c">// ← 拓扑匹配器</span>
+    InsTempReduceScatterMesh1D,            <span class="c">// ← 阶段 1/2：A 片 Mesh RS</span>
+    InsTempReduceScatterNHR,               <span class="c">// ← 阶段 1/2：B 片 NHR RS</span>
+    InsTempAllGatherMesh1D,                <span class="c">// ← 阶段 3/4：Mesh AG</span>
+    InsTempAllGatherNHR);                  <span class="c">// ← 阶段 3/4：NHR AG</span>
+<span class="c">#endif</span></pre>
+
+      <div class="codemap">
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/executor/ins_reduce_scatter_parallel_executor.cc:825</span><span class="cm-what">RS 注册</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/executor/ins_reduce_scatter_parallel_executor.cc:449</span><span class="cm-what">RS 切分比例</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/executor/ins_reduce_scatter_parallel_executor.cc:280</span><span class="cm-what">模板参数 / repeatNum</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/executor/ins_reduce_scatter_parallel_executor.cc:678</span><span class="cm-what">RS 执行顺序与同步</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/template/aicpu/ins_temp_reduce_scatter_mesh_1D.cc:348</span><span class="cm-what">Mesh 远端写入</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/template/aicpu/ins_temp_reduce_scatter_mesh_1D.cc:153</span><span class="cm-what">Mesh 接收端拷贝 + 规约</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/template/aicpu/ins_temp_reduce_scatter_nhr.cc:403</span><span class="cm-what">NHR 收发归约</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/reduce_scatter/algorithm/template/aicpu/ins_temp_reduce_scatter_nhr.cc:435</span><span class="cm-what">NHR 步骤计算</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/all_reduce/algorithm/executor/ins_v2_all_reduce_parallel_executor.cc:1568</span><span class="cm-what">AR 注册（四模板）</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/all_reduce/algorithm/executor/ins_v2_all_reduce_parallel_executor.cc:667</span><span class="cm-what">AR 切分比例</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/all_reduce/algorithm/executor/ins_v2_all_reduce_parallel_executor.cc:898</span><span class="cm-what">分块与 rank 映射</span></div>
+        <div class="cm-row"><span class="cm-path">src/ops/all_reduce/algorithm/executor/ins_v2_all_reduce_parallel_executor.cc:1182</span><span class="cm-what">四阶段调度</span></div>
+      </div>
+
+      <h3 class="sub">自测清单</h3>
+      <details>
+        <summary>① 验流量守恒：为什么总量与 ρ 无关</summary>
+        <div class="dc">
+          <p>ReduceScatter：代入 <code>Na = Nρd</code>、<code>Mb = M(1−ρ)d</code></p>
+          <p><code>V = (M−1)d(1 + (N−1)ρ) + (N−1)d(M − (M−1)ρ)</code></p>
+          <p><code>　 = d[(M−1) + (M−1)(N−1)ρ + M(N−1) − (M−1)(N−1)ρ]</code></p>
+          <p><code>　 = d[(M−1) + M(N−1)] = d(MN − 1) = (P−1)d</code> ✓</p>
+          <p>AllReduce 同理，<code>ρ</code> 的两个系数都化简为 <code>(P−1)/P</code>，权重和为 1。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>② 验 NHR 份数公式：<code>Σq<sub>s</sub> = N−1</code></summary>
+        <div class="dc">
+          <p><code>q<sub>s</sub> = ⌊(N−1+2<sup>s</sup>)/2<sup>s+1</sup>⌋</code>，轮数 <code>K = ⌈log₂N⌉</code>。</p>
+          <p>小规模手算：</p>
+          <ul>
+            <li><code>N=4</code>：<code>q = (2,1)</code>，和 = 3 ✓</li>
+            <li><code>N=5</code>：<code>q = (2,1,1)</code>，和 = 4 ✓</li>
+            <li><code>N=8</code>：<code>q = (4,2,1)</code>，和 = 7 ✓</li>
+          </ul>
+          <p>直觉：第 <code>s</code> 轮结束时，每个分片已经合并了 <code>2<sup>s+1</sup></code> 个源的贡献，
+            所以剩下的工作量按 <code>2<sup>s+1</sup></code> 递减，总和自然收敛到 <code>N−1</code>。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>③ 验分片所有权表（M = N = 2）</summary>
+        <div class="dc">
+          <p>A 片映射 <code>i·N + j</code>：<code>r0(j0,i0)→0</code>、<code>r1(j0,i1)→2</code>、<code>r2(j1,i0)→1</code>、<code>r3(j1,i1)→3</code> ✓</p>
+          <p>B 片映射 <code>j·M + i</code>：<code>r0(j0,i0)→0</code>、<code>r1(j0,i1)→1</code>、<code>r2(j1,i0)→2</code>、<code>r3(j1,i1)→3</code> ✓</p>
+          <p>与图 7 对照，两张表完全吻合。</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>④ 容易被公式掩盖的边界</summary>
+        <div class="dc">
+          <ul>
+            <li><b>「A/M」不是真的除法</b> —— <code>GenDataParamsAllRank</code> 里先 <code>RoundDown</code> 到数据类型大小的整数倍，余量给最后一个 rank（<code>tailSize</code>），尾片可能<b>比 sliceSize 更大</b>。</li>
+            <li><b>分循环</b> —— <code>sliceCount</code> 受 CCL scratch 与 <code>UB_MAX_DATA_SIZE</code> 限制，<code>loopTimes = ceil(dataCount_/sliceCount)</code>，余量摊到剩下的轮次。</li>
+            <li><b>对称内存不分循环</b> —— <code>sliceCount = dataCount_</code>，一次做完。</li>
+            <li><b>数据类型限制</b> —— 基础注册不支持 64 位类型（INT64/UINT64/FP64）和 PROD；CCU 变体另外排除 INT8 和 inplace；MultiJetty 变体不支持对称内存。<b>所以上面的公式永远不适用于 64 位数据。</b></li>
+            <li><b>命名有坑</b> —— <code>CalcIntraDataAllRank</code> 填的却是 <code>rankBaseOffInterAGMap_</code>，反之亦然；模板名里的 <code>Intra</code>/<code>Inter</code> 指 server 内 / server 间。</li>
+          </ul>
+        </div>
+      </details>
+
+      <h3 class="sub">建议的阅读顺序</h3>
+      <ol>
+        <li>先看 <code>ins_reduce_scatter_parallel_executor.cc:280</code>（模板参数与 repeatNum），理解「两阶段 + 两片」的装配。</li>
+        <li>再看 <code>:449</code>（切分）与 <code>:678</code>（执行顺序 + 同步），理解两阶段如何串起来。</li>
+        <li>然后跳到 <code>ins_temp_reduce_scatter_nhr.cc:435</code>，把逐轮公式和图 9 对上。</li>
+        <li>最后看 <code>ins_v2_all_reduce_parallel_executor.cc:1180</code>（四阶段调度）与 <code>:897</code>（分片映射）。</li>
+        <li>想动手验算，用本页 §10 的四条自测清单。</li>
+      </ol>
+    </section>
+
+    <footer class="article-footer">
+      <p class="strong">HCCL / Algorithm Atlas · 09 — ReduceScatter / AllReduce Parallel</p>
+      <p>
+        所有行号对应本地源码快照 <code>master</code> 分支，整理于 2026-09-16。
+        内容已逐条与源码核对，但源码会随 CANN 版本演进 —— 引用前请重新确认行号。
+        姊妹篇：<a href="allgather-parallel.html">AllGather Parallel 图解</a>、
+        <a href="hccl-selector.html">新 Selector 图解指南</a>。
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var PL_X = 70, PL_W = 540, PL_Y = 30, PL_H = 210;
+
+  var selM = document.getElementById('sel-m');
+  var selN = document.getElementById('sel-n');
+  var selAlg = document.getElementById('sel-alg');
+  var rng = document.getElementById('rng-rho');
+  var outRho = document.getElementById('out-rho');
+  var lineMesh = document.getElementById('tf-mesh');
+  var lineNhr = document.getElementById('tf-nhr');
+  var cross = document.getElementById('tf-cross');
+  var crossGd = document.getElementById('tf-cross-gd');
+  var crossLb = document.getElementById('tf-cross-lb');
+  var tk1 = document.getElementById('tf-t1'), tk2 = document.getElementById('tf-t2');
+  var tk1Lb = document.getElementById('tf-t1-lb'), tk2Lb = document.getElementById('tf-t2-lb');
+  var lbMesh = document.getElementById('lb-mesh'), lbNhr = document.getElementById('lb-nhr'), lbSum = document.getElementById('lb-sum');
+  var valMesh = document.getElementById('val-mesh'), valNhr = document.getElementById('val-nhr'), valSum = document.getElementById('val-sum');
+  var verdict = document.getElementById('verdict');
+  var pill = document.getElementById('rs-pill');
+
+  if (!selM || !rng) { return; }
+
+  // ---- 流量模型（均匀分片，单位：RS 为 d 字节，AR 为 S 字节）----
+  function vMeshRS(M, N, r) { return (M - 1) * (N * r + (1 - r)); }
+  function vNhrRS(M, N, r) { return (N - 1) * (M * (1 - r) + r); }
+  function vMeshAR(M, N, r) { return 2 * (M - 1) * (r / M + (1 - r) / (M * N)); }
+  function vNhrAR(M, N, r) { return 2 * (N - 1) * ((1 - r) / N + r / (M * N)); }
+  function vMesh(M, N, r, alg) { return alg === 'ar' ? vMeshAR(M, N, r) : vMeshRS(M, N, r); }
+  function vNhr(M, N, r, alg) { return alg === 'ar' ? vNhrAR(M, N, r) : vNhrRS(M, N, r); }
+
+  function xOf(r) { return PL_X + PL_W * r; }
+  function yOf(frac) { return PL_Y + PL_H * (1 - frac); }
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  function curve(fn, M, N, alg, other) {
+    var pts = [];
+    for (var k = 0; k <= 100; k++) {
+      var r = k / 100;
+      var v = fn(M, N, r, alg);
+      var tot = v + other(M, N, r, alg);
+      var frac = tot > 0 ? v / tot : 0;
+      pts.push(xOf(r).toFixed(1) + ',' + yOf(frac).toFixed(1));
+    }
+    return pts.join(' ');
+  }
+
+  function fmt(x) {
+    if (!isFinite(x)) { return '—'; }
+    if (x >= 1000) { return x.toFixed(0); }
+    if (x >= 100) { return x.toFixed(1); }
+    return x.toFixed(2);
+  }
+
+  function placeTick(el, elLb, r) {
+    var x = xOf(clamp(r, 0, 1)).toFixed(1);
+    el.setAttribute('x1', x); el.setAttribute('x2', x);
+    elLb.setAttribute('x', x);
+  }
+
+  function render() {
+    var M = parseInt(selM.value, 10);
+    var N = parseInt(selN.value, 10);
+    var alg = selAlg.value;
+    var r = parseFloat(rng.value);
+    var unit = alg === 'ar' ? '× S' : '× d';
+
+    outRho.textContent = r.toFixed(2);
+    pill.textContent = alg === 'ar'
+      ? 'AllReduce · M=' + M + ', N=' + N + '，S = P·d'
+      : 'ReduceScatter · M=' + M + ', N=' + N + '，d = 每 rank 输出';
+
+    lineMesh.setAttribute('points', curve(vMesh, M, N, alg, vNhr));
+    lineNhr.setAttribute('points', curve(vNhr, M, N, alg, vMesh));
+
+    // 总量平衡点：两侧总量相等（三个算子公式一致）
+    var rStar = (M * N - 2 * M + 1) / (2 * (M - 1) * (N - 1));
+    rStar = clamp(rStar, 0, 1);
+    var cx = xOf(rStar), cy = yOf(0.5);
+    cross.setAttribute('cx', cx.toFixed(1));
+    cross.setAttribute('cy', cy.toFixed(1));
+    crossGd.setAttribute('x1', cx.toFixed(1));
+    crossGd.setAttribute('x2', cx.toFixed(1));
+    crossLb.setAttribute('x', clamp(cx, PL_X + 56, PL_X + PL_W - 56).toFixed(1));
+    crossLb.setAttribute('y', (cy - 16 > PL_Y + 8 ? cy - 15 : cy + 24).toFixed(1));
+    crossLb.textContent = '均衡点 ρ* = ' + rStar.toFixed(2);
+
+    // 分阶段平衡点
+    var r1 = M * (N - 1) / (N * (M - 1) + M * (N - 1));
+    var r2 = (M - 1) / ((M - 1) + (N - 1));
+    placeTick(tk1, tk1Lb, r1);
+    placeTick(tk2, tk2Lb, r2);
+    tk1Lb.textContent = 'ρ₁=' + r1.toFixed(2);
+    tk2Lb.textContent = 'ρ₂=' + r2.toFixed(2);
+    tk1Lb.setAttribute('y', '258');
+    tk2Lb.setAttribute('y', '272');
+
+    var vm = vMesh(M, N, r, alg), vn = vNhr(M, N, r, alg), vt = vm + vn;
+    lbMesh.textContent = 'Mesh 发送量（' + unit + '）';
+    lbNhr.textContent = 'NHR 发送量（' + unit + '）';
+    lbSum.textContent = alg === 'ar' ? '总量 = 2(P−1)/P · S' : '总量 = (P−1) · d';
+    valMesh.textContent = fmt(vm) + ' ' + unit;
+    valNhr.textContent = fmt(vn) + ' ' + unit;
+    valSum.textContent = fmt(vt) + ' ' + unit;
+
+    var fMesh = vt > 0 ? vm / vt : 0;
+    var who = Math.abs(fMesh - 0.5) < 0.02
+      ? '两个维度几乎均分流量。'
+      : (fMesh > 0.5
+        ? 'Mesh 承担了 <b>' + (fMesh * 100).toFixed(0) + '%</b> 的流量，NHR 只占 ' + ((1 - fMesh) * 100).toFixed(0) + '%。'
+        : 'NHR 承担了 <b>' + ((1 - fMesh) * 100).toFixed(0) + '%</b> 的流量，Mesh 只占 ' + (fMesh * 100).toFixed(0) + '%。');
+
+    verdict.innerHTML = '当前 ρ = ' + r.toFixed(2) + '：' + who +
+      ' 总量始终是 <b>' + fmt(vt) + ' ' + unit + '</b>，与 ρ 无关 —— ' +
+      'ρ 只是在两个维度之间重新分配。总量平衡点在 ρ* = ' + rStar.toFixed(2) +
+      '，而两个阶段各自的配平点落在 ρ₁ = ' + r1.toFixed(2) + ' 与 ρ₂ = ' + r2.toFixed(2) +
+      '（M = N 时三者才会重合到 0.5）。';
+  }
+
+  selM.addEventListener('change', render);
+  selN.addEventListener('change', render);
+  selAlg.addEventListener('change', render);
+  rng.addEventListener('input', render);
+  render();
+})();
+
+(function () {
+  'use strict';
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a, .mobile-nav a'));
+  var targets = [];
+  links.forEach(function (a) {
+    var id = (a.getAttribute('href') || '').replace('#', '');
+    var el = id && document.getElementById(id);
+    if (el && targets.indexOf(el) === -1) { targets.push(el); }
+  });
+  if (!targets.length || !('IntersectionObserver' in window)) { return; }
+
+  function mark(id) {
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+    });
+  }
+  var seen = {};
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
+    var best = null, bestV = 0;
+    targets.forEach(function (t) {
+      var v = seen[t.id] || 0;
+      if (v > bestV) { bestV = v; best = t.id; }
+    });
+    if (best) { mark(best); }
+  }, { rootMargin: '-90px 0px -55% 0px', threshold: [0, 0.15, 0.4, 0.75, 1] });
+
+  targets.forEach(function (t) { obs.observe(t); });
+})();
+</script>
+</body>
+</html>
