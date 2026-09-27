@@ -1,1 +1,11 @@
 .claude/settings.local.json
+
+# CUDA experiments: keep source and notes, rebuild on each GPU machine.
+cuda/labs/**/build*/
+cuda/labs/**/vector_add
+cuda/labs/**/vector_add_oob
+cuda/labs/**/*.o
+cuda/labs/**/*.exe
+cuda/labs/**/reports/
+cuda/labs/**/*.nsys-rep
+cuda/labs/**/*.sqlite

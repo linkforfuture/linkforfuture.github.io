@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CUDA 实践学习：环境搭建、线程与数据实验、可运行源码，以及本机和远端 GPU 的学习记录。">
+  <title>CUDA 实践学习 · Linkforfuture</title>
+  <link rel="stylesheet" href="../work/docsify/vue.css">
+  <style>
+    :root { --theme-color: #4f46e5; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .sidebar { background: #fafbfc; }
+    .sidebar > h1 { font-size: 1.15rem; }
+    .markdown-section { max-width: 900px; }
+    .markdown-section h1 { line-height: 1.35; }
+    .markdown-section pre { position: relative; padding-top: 42px; }
+    .copy-code { position: absolute; top: 8px; right: 10px; border: 1px solid #dce0e6; background: white; border-radius: 5px; padding: 4px 10px; color: #4f46e5; cursor: pointer; font: inherit; font-size: 12px; }
+    .copy-code:focus-visible, a:focus-visible { outline: 2px solid #4f46e5; outline-offset: 3px; }
+    .learning-intro { margin: 20px 0 28px; padding: 22px 24px; background: #eef0ff; border-radius: 12px; border-left: 4px solid #4f46e5; }
+    .learning-intro p { margin: 0; }
+    .learning-intro a { display: inline-block; margin-top: 12px; }
+    .markdown-section table { width: 100%; }
+    @media (max-width: 600px) {
+      .content { width: 100%; }
+      .markdown-section { padding: 24px 18px; }
+      .markdown-section h1 { font-size: 1.75rem; }
+      .learning-intro { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">正在加载 CUDA 学习文档…</div>
+  <noscript>请启用 JavaScript 阅读站内文档，或到 <a href="https://github.com/linkforfuture/linkforfuture.github.io/tree/main/cuda">GitHub 阅读 Markdown 和源码</a>。</noscript>
+  <script>
+    window.$docsify = {
+      name: 'CUDA 实践学习',
+      nameLink: '#/',
+      loadSidebar: true,
+      alias: { '/.*/_sidebar.md': '/_sidebar.md' },
+      subMaxLevel: 2,
+      auto2top: true,
+      themeColor: '#4f46e5',
+      notFoundPage: true,
+      search: {
+        placeholder: '搜索课程、命令或问题',
+        noData: '没有找到相关内容',
+        paths: 'auto',
+        depth: 4,
+        namespace: 'cuda-learning'
+      },
+      plugins: [function(hook) {
+        hook.doneEach(function() {
+          document.querySelectorAll('.markdown-section pre').forEach(function(pre) {
+            const code = pre.querySelector('code');
+            if (!code || pre.querySelector('.copy-code')) return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'copy-code';
+            button.textContent = '复制代码';
+            button.setAttribute('aria-label', '复制此代码块');
+            button.addEventListener('click', async function() {
+              try {
+                await navigator.clipboard.writeText(code.textContent);
+                button.textContent = '已复制';
+              } catch (_) {
+                button.textContent = '请选中代码复制';
+              }
+              setTimeout(function() { button.textContent = '复制代码'; }, 2200);
+            });
+            pre.appendChild(button);
+          });
+        });
+      }]
+    };
+  </script>
+  <script src="../work/docsify/docsify.min.js"></script>
+  <script src="../work/docsify/prism-c.min.js"></script>
+  <script src="../work/docsify/prism-cpp.min.js"></script>
+  <script src="../work/docsify/prism-bash.min.js"></script>
+  <script src="../work/docsify/prism-json.min.js"></script>
+  <script src="../work/docsify/prism-markdown.min.js"></script>
+  <script src="../work/docsify/search.min.js"></script>
+</body>
+</html>
