@@ -20,7 +20,24 @@ body.lf-site { margin: 0; background: var(--lf-bg); color: var(--lf-text); font:
 .lf-skip { position: fixed; left: 16px; top: -100px; z-index: 100; padding: var(--lf-space-2) var(--lf-space-4); background: var(--lf-surface); border: 2px solid var(--lf-accent); }
 .lf-skip:focus { top: 12px; }
 .lf-container { width: min(100%, var(--lf-width)); margin: auto; padding: 0 var(--lf-space-8); }
-.lf-home-hero { padding: 68px 0 var(--lf-space-12); display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 64px; align-items: center; }
+.lf-home-hero { padding: 88px 0 80px; display: grid; grid-template-columns: minmax(0,1fr) 240px; gap: var(--lf-space-12); align-items: center; }
+.lf-hello { font-size: 21px; margin: 0 0 var(--lf-space-3); }
+.lf-site .lf-person-name { font-size: clamp(30px, 4vw, 48px); overflow-wrap: anywhere; }
+.lf-name-dot { color: var(--lf-accent); }
+.lf-person-mark { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--lf-line); border-radius: 50%; width: 220px; height: 220px; background: var(--lf-surface); transform: rotate(-6deg); }
+.lf-person-mark > span { font: 500 96px/1.1 Georgia, serif; }
+.lf-person-mark small { margin-top: var(--lf-space-4); font-size: 12px; letter-spacing: .3em; color: var(--lf-muted); }
+.lf-home-spaces { padding-top: var(--lf-space-8); border-top: 1px solid var(--lf-line); }
+.lf-space-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--lf-space-6); }
+.lf-site .lf-space-card { display: flex; flex-direction: column; padding: var(--lf-space-8); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); background: var(--lf-surface); color: var(--lf-text); }
+.lf-site .lf-space-card:hover { border-color: var(--lf-accent); text-decoration: none; }
+.lf-space-card h3 { margin: 0 0 var(--lf-space-3); font-size: 24px; }
+.lf-space-card p { margin: 0 0 var(--lf-space-6); font-size: 15px; color: var(--lf-muted); }
+.lf-space-link { margin-top: auto; font-size: 14px; color: var(--lf-accent); }
+.lf-local-nav { display: flex; gap: var(--lf-space-4) var(--lf-space-6); flex-wrap: wrap; font-size: 14px; margin-bottom: var(--lf-space-4); }
+.lf-heading-after-crumb { padding-top: var(--lf-space-4); }
+.lf-about { margin-left: 0; }
+.lf-about .lf-about-note { color: var(--lf-muted); font-size: 14px; }
 .lf-kicker { display: block; color: var(--lf-accent); font: 600 12px/1.6 var(--lf-mono); letter-spacing: .1em; margin-bottom: var(--lf-space-4); }
 .lf-site .lf-title { color: var(--lf-text); font-size: clamp(30px, 4vw, 46px); line-height: 1.3; letter-spacing: -.035em; margin: 0 0 20px; font-weight: 700; }
 .lf-lead { max-width: 680px; color: var(--lf-muted); margin: 0 0 var(--lf-space-6); font-size: 18px; }
@@ -29,9 +46,6 @@ body.lf-site { margin: 0; background: var(--lf-bg); color: var(--lf-text); font:
 .lf-site .lf-button:hover { border-color: var(--lf-accent); text-decoration: none; }
 .lf-site .lf-button-primary { background: var(--lf-accent); color: var(--lf-surface); border-color: var(--lf-accent); }
 .lf-site .lf-button-primary:hover { background: var(--lf-accent-hover); }
-.lf-focus { border-left: 2px solid var(--lf-line); padding: var(--lf-space-2) 0 var(--lf-space-2) var(--lf-space-6); font-size: 14px; }
-.lf-focus h2 { margin: var(--lf-space-2) 0; font-size: 19px; line-height: 1.5; }
-.lf-focus p { color: var(--lf-muted); margin: var(--lf-space-2) 0 18px; }
 .lf-section { margin-bottom: var(--lf-space-12); }
 .lf-section-head { display: flex; align-items: baseline; gap: var(--lf-space-4); justify-content: space-between; margin-bottom: 20px; }
 .lf-section-head h2 { margin: 0; font-size: 23px; letter-spacing: -.02em; }
@@ -84,7 +98,10 @@ body.lf-site { margin: 0; background: var(--lf-bg); color: var(--lf-text); font:
   .lf-menu { display: block; }
   .lf-container { padding: 0 20px; }
   .lf-home-hero { padding: 40px 0 var(--lf-space-8); grid-template-columns: 1fr; gap: 28px; }
-  .lf-focus { padding-left: 18px; }
+  .lf-person-mark { display: none; }
+  .lf-space-grid { grid-template-columns: 1fr; gap: var(--lf-space-4); }
+  .lf-space-card { padding: var(--lf-space-6); }
+  .lf-home-spaces .lf-section-head { flex-direction: column; gap: var(--lf-space-2); }
   .lf-lead { font-size: 16px; }
   .lf-entry { gap: 10px; flex-direction: column; padding: 18px 0; }
   .lf-entry-meta { padding: 0; }

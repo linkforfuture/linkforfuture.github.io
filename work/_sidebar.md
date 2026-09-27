@@ -2,7 +2,7 @@
 
 
 - 首页
-  - [关于本站](README.md)
+  - [工作文档](README.md)
 
 - 需求文档（SRS/SD）
   - [AllGather NHR 减少 LocalCopy](srs-sd/allgather-nhr-reduce-localcopy-srs-sd.md)

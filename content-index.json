@@ -1,4 +1,27 @@
 {
+  "sections": [
+    {
+      "id": "work",
+      "title": "工作",
+      "url": "work/",
+      "label": "WORK",
+      "description": "工作中做过的设计、分析与实践，留一份可以回看的记录。"
+    },
+    {
+      "id": "learning",
+      "title": "学习",
+      "url": "topics.html",
+      "label": "LEARNING",
+      "description": "从笔记到动手实验，收集学习过程中的问题与收获。"
+    },
+    {
+      "id": "about",
+      "title": "关于我",
+      "url": "about.html",
+      "label": "ABOUT ME",
+      "description": "认识 Linkforfuture，了解这个小站，也找到我的其他主页。"
+    }
+  ],
   "topics": [
     {
       "id": "communication",
@@ -30,25 +53,28 @@
       "id": "work",
       "title": "工作文档",
       "topic": "communication",
-      "description": "需求、设计、拓扑与问题分析"
+      "description": "需求、设计、拓扑与问题分析",
+      "section": "work"
     },
     {
       "id": "cuda",
       "title": "CUDA 实践学习",
       "topic": "gpu",
-      "description": "环境、课程与实验记录"
+      "description": "环境、课程与实验记录",
+      "section": "learning"
     },
     {
       "id": "leetcode",
       "title": "算法与数据结构",
       "topic": "algorithms",
-      "description": "LeetCode 题解与交互演示"
+      "description": "LeetCode 题解与交互演示",
+      "section": "learning"
     }
   ],
   "entries": [
     {
       "id": "work-README",
-      "title": "关于本站",
+      "title": "工作文档",
       "summary": "工作文档 · 首页",
       "topic": "communication",
       "kind": "设计文档",
@@ -57,7 +83,8 @@
       "collection": "work",
       "group": "首页",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-srs-sd-allgather-nhr-reduce-localcopy-srs-sd",
@@ -70,7 +97,8 @@
       "collection": "work",
       "group": "需求文档（SRS/SD）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-srs-sd-parallel-split-ratio-srs-sd",
@@ -83,7 +111,8 @@
       "collection": "work",
       "group": "需求文档（SRS/SD）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-srs-sd-write-reduce-with-notify-srs-sd",
@@ -96,7 +125,8 @@
       "collection": "work",
       "group": "需求文档（SRS/SD）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-srs-sd-task-timeout-control-srs-sd",
@@ -109,7 +139,8 @@
       "collection": "work",
       "group": "需求文档（SRS/SD）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-srs-sd-topo-match-multilevel-3to2-srs-sd",
@@ -122,7 +153,8 @@
       "collection": "work",
       "group": "需求文档（SRS/SD）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-srs-sd-topo-parse-match-srs-sd",
@@ -135,7 +167,8 @@
       "collection": "work",
       "group": "需求文档（SRS/SD）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-parallel-executor-split-design",
@@ -148,7 +181,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-parallel-executor-split-design-doc",
@@ -161,7 +195,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-write-reduce-with-notify-refactor",
@@ -174,7 +209,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-aclrt-get-device-id-conversion",
@@ -187,7 +223,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-hccl-alg-multiple-dimension-split-ratio",
@@ -200,7 +237,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-aicpu-64bit-prod-reduce-design",
@@ -213,7 +251,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-allgather-nhr-last-step-optimization",
@@ -226,7 +265,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-design-hccl-architecture-entry",
@@ -239,7 +279,8 @@
       "collection": "work",
       "group": "设计 / 方案",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-link-binding-impl-plan",
@@ -252,7 +293,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-link-binding-refactor-design",
@@ -265,7 +307,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-physical-levels-design",
@@ -278,7 +321,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-topo-match-impl-plan",
@@ -291,7 +335,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-topo-match-refactor-design",
@@ -304,7 +349,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-topo-parse-impl-plan",
@@ -317,7 +363,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-topo-parse-refactor-design",
@@ -330,7 +377,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-topo-parse-virtual-design",
@@ -343,7 +391,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-topo-match-current-behavior",
@@ -356,7 +405,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-cross-pod-topology-analysis",
@@ -369,7 +419,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-topo-device-form-factor",
@@ -382,7 +433,8 @@
       "collection": "work",
       "group": "拓扑（Topo）",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-meshchunk-sync-issue",
@@ -395,7 +447,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-allgather-nhr-optimization-analysis",
@@ -408,7 +461,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-parallel-executor-split-review",
@@ -421,7 +475,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-aicpu-exec-timeout-analysis",
@@ -434,7 +489,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-allgather-nhr-rank1-empty-channels",
@@ -447,7 +503,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-checker-barrier-analysis",
@@ -460,7 +517,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-allgather-nhr-regression-test-plan",
@@ -473,7 +531,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-checker-l2-execution",
@@ -486,7 +545,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-checker-failure-analysis",
@@ -499,7 +559,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-hccl-vm-sqe-parse-stub",
@@ -512,7 +573,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-hccl-vm-test-guide",
@@ -525,7 +587,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-meshchunk-barrier-issue",
@@ -538,7 +601,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-analysis-rs-512mb-summary",
@@ -551,7 +615,8 @@
       "collection": "work",
       "group": "分析报告",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-hcomm-hcomm-channel-connection-flow",
@@ -564,7 +629,8 @@
       "collection": "work",
       "group": "HCOMM 分析",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "work-hcomm-hcomm-write-data-flow",
@@ -577,7 +643,8 @@
       "collection": "work",
       "group": "HCOMM 分析",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "work"
     },
     {
       "id": "cuda-README",
@@ -590,7 +657,8 @@
       "collection": "cuda",
       "group": "开始学习",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "cuda-environment-setup-wsl2",
@@ -603,7 +671,8 @@
       "collection": "cuda",
       "group": "开始学习",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "cuda-remote-gpu",
@@ -616,7 +685,8 @@
       "collection": "cuda",
       "group": "开始学习",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "cuda-lesson-01-vector-add",
@@ -629,7 +699,8 @@
       "collection": "cuda",
       "group": "动手实验",
       "updated": null,
-      "featured": true
+      "featured": true,
+      "section": "learning"
     },
     {
       "id": "cuda-labs-01-vector-add-README",
@@ -642,7 +713,8 @@
       "collection": "cuda",
       "group": "动手实验",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "cuda-notes-README",
@@ -655,7 +727,8 @@
       "collection": "cuda",
       "group": "学习记录",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "cuda-notes-template",
@@ -668,7 +741,8 @@
       "collection": "cuda",
       "group": "学习记录",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "leetcode-README",
@@ -681,7 +755,8 @@
       "collection": "leetcode",
       "group": "专栏首页",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "leetcode-solutions-0003-longest-substring-without-repeating-characters",
@@ -694,7 +769,8 @@
       "collection": "leetcode",
       "group": "滑动窗口",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "leetcode-solutions-0239-sliding-window-maximum",
@@ -707,7 +783,8 @@
       "collection": "leetcode",
       "group": "单调队列",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "study",
@@ -718,7 +795,8 @@
       "source": "XCCL/study.html",
       "url": "XCCL/study.html",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "selector",
@@ -729,7 +807,8 @@
       "source": "XCCL/hccl-selector.html",
       "url": "XCCL/hccl-selector.html",
       "updated": null,
-      "featured": true
+      "featured": true,
+      "section": "learning"
     },
     {
       "id": "selector-reference",
@@ -740,7 +819,8 @@
       "source": "XCCL/hccl-selector-reference.html",
       "url": "XCCL/hccl-selector-reference.html",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "allgather",
@@ -751,7 +831,8 @@
       "source": "XCCL/allgather-parallel.html",
       "url": "XCCL/allgather-parallel.html",
       "updated": null,
-      "featured": true
+      "featured": true,
+      "section": "learning"
     },
     {
       "id": "reduce-scatter",
@@ -762,7 +843,8 @@
       "source": "XCCL/rs-ar-parallel.html",
       "url": "XCCL/rs-ar-parallel.html",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "shape",
@@ -773,7 +855,8 @@
       "source": "shape_flow_diagram.html",
       "url": "shape_flow_diagram.html",
       "updated": null,
-      "featured": true
+      "featured": true,
+      "section": "learning"
     },
     {
       "id": "sliding-window",
@@ -784,7 +867,8 @@
       "source": "leetcode/demos/0239-sliding-window-maximum.html",
       "url": "leetcode/demos/0239-sliding-window-maximum.html",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "learning"
     },
     {
       "id": "resume",
@@ -795,7 +879,8 @@
       "source": "resume-weixin_43960572.html",
       "url": "resume-weixin_43960572.html",
       "updated": null,
-      "featured": false
+      "featured": false,
+      "section": "about"
     }
   ]
 }

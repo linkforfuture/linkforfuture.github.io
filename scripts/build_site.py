@@ -12,6 +12,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 DATA = json.loads((ROOT / 'content-index.json').read_text(encoding='utf-8'))
 TOPICS = {item['id']: item for item in DATA['topics']}
+SECTIONS = {item['id']: item for item in DATA['sections']}
 ENTRIES = DATA['entries']
 OUTPUTS = {}
 
@@ -31,7 +32,7 @@ def head(path, extra=''):
 
 def header(path, active, target='lf-content'):
     base = prefix(path)
-    links = [('index.html','首页','home'),('topics.html','专题','topics'),('diagrams.html','图解实验','diagrams'),('work/','工作文档','work'),('resume-weixin_43960572.html','关于我','about')]
+    links = [('index.html','首页','home')] + [(item['url'],item['title'],item['id']) for item in DATA['sections']]
     nav = ''.join(f'<a href="{base}{url}"'+(' aria-current="page"' if key == active else '')+f'>{label}</a>' for url,label,key in links)
     return f'''<a class="lf-skip" href="#{target}">跳到正文</a>
 <header class="lf-header"><div class="lf-header-inner">
@@ -42,7 +43,7 @@ def header(path, active, target='lf-content'):
 
 def footer(path):
     base = prefix(path)
-    return f'''<footer class="lf-footer"><div class="lf-footer-inner"><span>Linkforfuture · 记录学习、工作与思考</span><div class="lf-footer-links"><a href="https://github.com/linkforfuture/linkforfuture.github.io">GitHub</a><a href="{base}topics.html">全部内容</a><a href="{base}resume-weixin_43960572.html#learning-path">学习路径</a></div></div></footer>'''
+    return f'''<footer class="lf-footer"><div class="lf-footer-inner"><span>Linkforfuture · 记录工作、学习与思考 · 持续生长</span><div class="lf-footer-links"><a href="https://github.com/linkforfuture">GitHub ↗</a><a href="{base}about.html">关于这个小站</a></div></div></footer>'''
 
 def document(path, title, description, content, active, scripts=''):
     return f'''<!doctype html>
@@ -63,33 +64,33 @@ def entry_row(item):
     return f'''<article class="lf-entry" data-lf-entry data-topic="{esc(item['topic'])}"><div><a class="lf-entry-title" href="{esc(item['url'])}">{esc(item['title'])}</a><p>{esc(item['summary'])}</p></div><div class="lf-entry-meta"><span>{esc(topic)}</span><span class="lf-tag">{esc(item['kind'])}</span></div></article>'''
 
 def homepage():
-    cards=[]
-    for topic in DATA['topics']:
-        count=sum(item['topic']==topic['id'] and item['kind']!='关于我' for item in ENTRIES)
-        cards.append(f'''<a class="lf-topic" href="topics.html#{topic['id']}"><small>{topic['label']}</small><h3>{topic['title']}</h3><p>{topic['description']}</p><span class="lf-count">{count} 篇内容 →</span></a>''')
-    featured='\n'.join(entry_row(item) for item in ENTRIES if item.get('featured'))
-    content=f'''<section class="lf-home-hero"><div><span class="lf-kicker">NOTES / SYSTEMS / EXPERIMENTS</span><h1 class="lf-title">集合通信与<br>AI 基础设施。</h1><p class="lf-lead">记录系统如何工作，也记录我如何理解它。<br>从 HCCL 与 GPU 编程，到算法推导和动手实验。</p><div class="lf-actions"><a class="lf-button lf-button-primary" href="topics.html">浏览技术专题 →</a><a class="lf-button" href="resume-weixin_43960572.html">关于我</a></div></div><aside class="lf-focus"><span class="lf-kicker">LEARNING IN PRACTICE</span><h2>从理解原理，到动手验证</h2><p>以集合通信研发为起点，逐步学习 CUDA、NCCL 与训练通信。</p><a href="resume-weixin_43960572.html#learning-path">查看 12 周学习路径 →</a></aside></section>
-<section class="lf-section" aria-labelledby="lf-topics-title"><div class="lf-section-head"><h2 id="lf-topics-title">沿着专题阅读</h2><a href="topics.html">全部专题 →</a></div><div class="lf-topic-grid">{''.join(cards)}</div></section>
-<section class="lf-section" aria-labelledby="lf-featured-title"><div class="lf-section-head"><h2 id="lf-featured-title">精选内容</h2><a href="diagrams.html">探索图解实验 →</a></div>{featured}</section>
-<section class="lf-section lf-note"><h2>工作中的设计与分析</h2><p>需求规格、系统设计、拓扑解析与问题定位，按原有文档目录持续整理。</p><a href="work/">进入工作文档 →</a></section>'''
-    OUTPUTS['index.html']=document('index.html','个人主页','集合通信、GPU 编程、算法与模型推理的个人技术笔记。',content,'home')
+    cards=''.join(f'''<a class="lf-space-card" href="{esc(section['url'])}"><span class="lf-kicker">{esc(section['label'])}</span><h3>{esc(section['title'])}</h3><p>{esc(section['description'])}</p><span class="lf-space-link">{esc(section['title'])} →</span></a>''' for section in DATA['sections'])
+    content=f'''<section class="lf-home-hero"><div><span class="lf-kicker">LINKFORFUTURE / PERSONAL SPACE</span><p class="lf-hello">你好，欢迎来我的小站。</p><h1 class="lf-title lf-person-name">我是 Linkforfuture<span class="lf-name-dot">。</span></h1><p class="lf-lead">在这里，记录工作、学习与思考。<br>把做过的事、学到的东西，慢慢留存下来。</p><div class="lf-actions"><a class="lf-button lf-button-primary" href="about.html">认识我 →</a><a class="lf-button" href="https://github.com/linkforfuture">GitHub ↗</a></div></div><div class="lf-person-mark" aria-hidden="true"><span>L<span class="lf-name-dot">.</span></span><small>持续生长</small></div></section>
+<section class="lf-section lf-home-spaces" aria-labelledby="lf-spaces-title"><div class="lf-section-head"><h2 id="lf-spaces-title">在这里逛逛</h2><span>关于我，也关于我在做的事</span></div><div class="lf-space-grid">{cards}</div></section>'''
+    OUTPUTS['index.html']=document('index.html','个人主页','Linkforfuture 的个人主页，记录工作、学习与思考。',content,'home')
+
+def aboutpage():
+    content='''<header class="lf-page-heading"><span class="lf-kicker">ABOUT ME</span><h1 class="lf-title">你好，我是 Linkforfuture。</h1><p class="lf-lead">欢迎来到我的个人主页。</p></header>
+<article class="lf-prose lf-about lf-section"><h2>关于我</h2><p>我的工作与 HCCL 集合通信相关。工作中的设计、问题分析，以及平时的学习记录，都慢慢整理到了这里。</p><p>这个小站是我的个人空间，用来留下工作、学习与思考的痕迹。</p><h2>这个小站里有什么</h2><p><a href="work/">工作</a>里是做过的需求、设计和分析；<a href="topics.html">学习</a>里是笔记、动手实验和图解。你可以从感兴趣的地方开始逛。</p><h2>在别处找到我</h2><p><a href="https://github.com/linkforfuture">GitHub · Linkforfuture ↗</a></p><h2>其他资料</h2><p><a href="resume-weixin_43960572.html">简历草稿与学习计划 →</a></p><p class="lf-about-note">这份简历是可编辑的整理稿，其中仍有待补全的信息。</p></article>'''
+    OUTPUTS['about.html']=document('about.html','关于我','认识 Linkforfuture，以及这个记录工作、学习与思考的小站。',content,'about')
 
 def directory(diagrams=False):
     path='diagrams.html' if diagrams else 'topics.html'
-    title='图解实验' if diagrams else '技术专题'
-    description='在图解与实验中理解数据流、算法和系统行为。' if diagrams else '按知识领域阅读笔记、设计、分析与实验。'
-    entries=[item for item in ENTRIES if item['kind']!='关于我' and (not diagrams or item['kind'] in ('图解','交互图解','实验'))]
+    title='图解实验' if diagrams else '学习'
+    description='在图解与实验中理解数据流、算法和系统行为。' if diagrams else '我的学习笔记、动手实验，以及用来帮助理解的图解。'
+    entries=[item for item in ENTRIES if item['section']=='learning' and (not diagrams or item['kind'] in ('图解','交互图解','实验'))]
     options=''.join(f'<option value="{topic["id"]}">{topic["title"]}</option>' for topic in DATA['topics'])
     groups=[]
     for topic in DATA['topics']:
         rows='\n'.join(entry_row(item) for item in entries if item['topic']==topic['id'])
         if rows: groups.append(f'<section class="lf-directory-group" id="{topic["id"]}" data-lf-group><h2>{topic["title"]}</h2>{rows}</section>')
-    content=f'''<header class="lf-page-heading"><span class="lf-kicker">{'VISUAL NOTES / LABS' if diagrams else 'KNOWLEDGE / INDEX'}</span><h1 class="lf-title">{title}</h1><p class="lf-lead">{description}</p></header>
+    subnav='<a href="topics.html">← 返回学习</a>' if diagrams else '<a href="diagrams.html">图解实验 →</a><a href="cuda/">CUDA 学习记录 →</a><a href="leetcode/">算法笔记 →</a>'
+    content=f'''<div class="lf-breadcrumb"><a href="index.html">首页</a> / {'<a href="topics.html">学习</a> / 图解实验' if diagrams else '学习'}</div><header class="lf-page-heading lf-heading-after-crumb"><span class="lf-kicker">{'LEARNING / LABS' if diagrams else 'LEARNING'}</span><h1 class="lf-title">{title}</h1><p class="lf-lead">{description}</p><div class="lf-local-nav" aria-label="学习板块">{subnav}</div></header>
 <div class="lf-filter-bar" data-lf-filters hidden><label>筛选标题与摘要<input type="search" placeholder="例如 CUDA、拓扑、AllGather" aria-describedby="lf-result-count"></label><label>知识领域<select><option value="">全部专题</option>{options}</select></label></div>
 <p class="lf-result-count" id="lf-result-count" role="status" aria-live="polite">共 {len(entries)} 篇内容</p>
 <p class="lf-empty" id="lf-empty" hidden>没有匹配的内容。试试更短的关键词，或选择全部专题。</p>
 <div class="lf-section">{''.join(groups)}</div>'''
-    OUTPUTS[path]=document(path,title,description,content,'diagrams' if diagrams else 'topics')
+    OUTPUTS[path]=document(path,title,description,content,'learning')
 
 def doc_collections():
     for collection in DATA['collections']:
@@ -107,7 +108,7 @@ def doc_collections():
 <link rel="stylesheet" href="{base}assets/vendor/docsify/vue.css">
 {head(path,extra)}</head><body class="lf-site lf-docs" data-collection="{cid}" data-page="{cid}">
 <!-- Generated by scripts/build_site.py. Shared config: assets/js/docs.js. -->
-{header(path,'work' if cid=='work' else 'topics')}
+{header(path,collection['section'])}
 <div id="lf-content"><div id="app">正在加载{esc(collection['title'])}…</div></div>
 <noscript><div class="lf-container"><p>文档阅读需要 JavaScript。也可以<a href="https://github.com/linkforfuture/linkforfuture.github.io/tree/main/{cid}">在 GitHub 阅读原始文档</a>。</p></div></noscript>
 {footer(path)}
@@ -134,7 +135,7 @@ def html_shells():
     for item in ENTRIES:
         if not item['source'].endswith('.html'): continue
         path=item['source']; text=(ROOT/path).read_text(encoding='utf-8'); base=prefix(path)
-        active='about' if item['kind']=='关于我' else ('diagrams' if item['kind'] in ['交互图解','图解'] else 'topics')
+        active=item['section']
         legacy=re.search(r'data-legacy="([^"]+)"',text)
         if legacy:
             extra=f'<link rel="stylesheet" href="{base}assets/css/pages/{legacy.group(1)}.css">\n<link rel="stylesheet" href="{base}assets/css/legacy.css">'
@@ -143,14 +144,16 @@ def html_shells():
             extra=''
         text=replace_block(text,'HEAD',head(path,extra))
         topic=TOPICS[item['topic']]
-        breadcrumb=f'<div class="lf-container"><div class="lf-breadcrumb"><a href="{base}topics.html">专题</a> / <a href="{base}topics.html#{topic["id"]}">{topic["title"]}</a> / {esc(item["title"])}</div></div>'
+        section=SECTIONS[active]
+        topic_link=f' / <a href="{base}topics.html#{topic["id"]}">{topic["title"]}</a>' if active=='learning' else ''
+        breadcrumb=f'<div class="lf-container"><div class="lf-breadcrumb"><a href="{base}{section["url"]}">{section["title"]}</a>{topic_link} / {esc(item["title"])}</div></div>'
         text=replace_block(text,'HEADER',header(path,active)+('\n'+breadcrumb if active!='about' else ''))
         text=replace_block(text,'FOOTER',footer(path))
         OUTPUTS[path]=text
 
 def main():
     parser=argparse.ArgumentParser(); parser.add_argument('--check',action='store_true'); args=parser.parse_args()
-    homepage(); directory(); directory(True); doc_collections(); html_shells()
+    homepage(); aboutpage(); directory(); directory(True); doc_collections(); html_shells()
     OUTPUTS['assets/js/content-data.js']='// Generated from content-index.json. Do not edit.\nwindow.LF_CONTENT = '+json.dumps(DATA,ensure_ascii=False,separators=(',',':'))+';\n'
     changed=[]
     for name,content in OUTPUTS.items():

@@ -4,6 +4,7 @@
   const cid = document.body.dataset.collection;
   const data = window.LF_CONTENT;
   const collection = data.collections.find(item => item.id === cid);
+  const section = data.sections.find(item => item.id === collection.section);
   const entries = data.entries.filter(item => item.collection === cid);
   window.$docsify = {
     name: collection.title, nameLink: '#/', loadSidebar: true,
@@ -23,7 +24,7 @@
         document.title = title + ' · Linkforfuture';
         const crumb = document.createElement('div');
         crumb.className = 'lf-breadcrumb';
-        const home = document.createElement('a'); home.href = '../topics.html'; home.textContent = '专题';
+        const home = document.createElement('a'); home.href = '../' + (section.id === 'work' ? 'index.html' : section.url); home.textContent = section.id === 'work' ? '首页' : section.title;
         const start = document.createElement('a'); start.href = '#/'; start.textContent = collection.title;
         crumb.append(home, document.createTextNode(' / '), start);
         if (route) crumb.append(document.createTextNode(' / ' + title));

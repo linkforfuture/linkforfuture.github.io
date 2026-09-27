@@ -35,18 +35,25 @@ def main():
     subprocess.run([sys.executable,str(ROOT/'scripts/build_site.py'),'--check'],check=True)
     data=json.loads((ROOT/'content-index.json').read_text(encoding='utf-8'))
     ids=set(); sources=set(); topics={item['id'] for item in data['topics']}
+    sections={item['id'] for item in data['sections']}
+    require(len(sections)==len(data['sections']),'Duplicate section id')
+    collection_sections={item['id']:item['section'] for item in data['collections']}
+    for cid,section in collection_sections.items():
+        require(section in sections,'Unknown collection section: '+cid)
     collections={item['id'] for item in data['collections']}
     for entry in data['entries']:
-        for key in ['id','title','summary','topic','kind','source','url','updated','featured']:
+        for key in ['id','title','summary','section','topic','kind','source','url','updated','featured']:
             require(key in entry,f'Entry missing {key}: {entry.get("id")}')
         require(entry['id'] not in ids,'Duplicate entry id: '+entry['id']); ids.add(entry['id'])
         require(entry['source'] not in sources,'Duplicate source: '+entry['source']); sources.add(entry['source'])
         require(entry['topic'] in topics,'Unknown topic: '+entry['id'])
+        require(entry.get('section') in sections,'Unknown section: '+entry['id'])
         target=(ROOT/entry['source']).resolve()
         require(target.is_relative_to(ROOT.resolve()) and target.is_file(),'Missing/unsafe source: '+entry['source'])
         if entry['source'].endswith('.md'):
             cid=entry.get('collection')
             require(cid in collections,'Missing collection: '+entry['source'])
+            require(entry.get('section')==collection_sections.get(cid),'Entry section differs from collection: '+entry['id'])
             require(bool(entry.get('group')),'Missing sidebar group: '+entry['source'])
             rel=entry['source'][len(cid)+1:]
             expected=cid+'/#/'+('' if rel=='README.md' else rel.removesuffix('.md'))
@@ -70,7 +77,7 @@ def main():
         require(text.count('<footer class="lf-footer">')==1,'Expected one shared footer: '+rel)
         require('user-scalable=no' not in text and 'maximum-scale=1' not in text,'Zoom is disabled: '+rel)
         require(not page.duplicates,'Duplicate element IDs: '+rel+' '+str(page.duplicates))
-        if rel not in ['index.html','topics.html','diagrams.html'] and rel not in [c+'/index.html' for c in collections]:
+        if rel not in ['index.html','about.html','topics.html','diagrams.html'] and rel not in [c+'/index.html' for c in collections]:
             require(rel in sources,'Unregistered HTML: '+rel)
             if rel in html_entries:
                 require(f'data-page="{html_entries[rel]["id"]}"' in text,'Page id does not match registry: '+rel)

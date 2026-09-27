@@ -1,6 +1,6 @@
 # linkforfuture
 
-我的 GitHub Pages 站点仓库。
+Linkforfuture 的个人主页，记录工作、学习与思考。工作、学习、关于我是并列板块，技术笔记放在各自板块内。
 
 https://linkforfuture.github.io/
 
@@ -9,7 +9,8 @@ https://linkforfuture.github.io/
 网站使用统一的静态页面外框；Markdown 文档由 Docsify 阅读，交互图解保留 HTML。添加内容前先阅读 [AGENTS.md](AGENTS.md) 和 [设计规范](design/DESIGN_SYSTEM.md)。
 
 - 所有内容登记在 [content-index.json](content-index.json)，模板在 [templates/](templates/)。
-- 首页、专题目录、图解目录、集合入口、侧栏和公共导航由生成器维护。
+- 首页、关于我、学习目录（`topics.html`）、图解目录、集合入口、侧栏和公共导航由生成器维护。
+- 内容索引中的 `section` 决定一级板块归属，`topic` 是内部专题；新增个人内容无需归入学习。网站定位和首页层级见设计规范。
 - 全站样式在 `assets/css/`，文档集合共享 `assets/vendor/docsify/` 的原版本地依赖。
 
 ```sh
