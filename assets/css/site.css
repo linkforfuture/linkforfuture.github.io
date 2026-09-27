@@ -1,0 +1,100 @@
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--lf-header) + var(--lf-space-6)); }
+body.lf-site { margin: 0; background: var(--lf-bg); color: var(--lf-text); font: 17px/1.85 var(--lf-sans); -webkit-font-smoothing: antialiased; }
+.lf-site a { color: var(--lf-accent); text-decoration: none; text-underline-offset: 4px; }
+.lf-site a:hover { text-decoration: underline; }
+.lf-site :focus-visible { outline: 3px solid var(--lf-accent); outline-offset: 4px; }
+.lf-site button, .lf-site input, .lf-site select { font: inherit; }
+.lf-site button, .lf-site summary { cursor: pointer; }
+.lf-site [hidden] { display: none !important; }
+.lf-header { position: sticky; top: 0; z-index: 60; background: var(--lf-surface); border-bottom: 1px solid var(--lf-line); }
+.lf-header-inner { max-width: 1440px; min-height: var(--lf-header); padding: var(--lf-space-3) var(--lf-space-8); margin: auto; display: flex; align-items: center; justify-content: space-between; gap: var(--lf-space-6); }
+.lf-site .lf-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: var(--lf-text); line-height: 1.3; white-space: nowrap; }
+.lf-brand-mark { display: grid; place-items: center; width: 30px; height: 30px; background: var(--lf-accent); border-radius: 8px; color: var(--lf-surface); font: 600 17px var(--lf-mono); }
+.lf-nav { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lf-site .lf-nav a { padding: 7px var(--lf-space-3); border-radius: var(--lf-control-radius); color: var(--lf-muted); font-size: 14px; line-height: 1.6; }
+.lf-site .lf-nav a:hover, .lf-site .lf-nav a[aria-current="page"] { background: var(--lf-tint); color: var(--lf-accent); text-decoration: none; }
+.lf-menu { display: none; position: relative; font-size: 14px; }
+.lf-menu summary { padding: var(--lf-space-2) var(--lf-space-3); border: 1px solid var(--lf-line); border-radius: var(--lf-control-radius); list-style-position: inside; }
+.lf-menu[open] .lf-nav { position: absolute; right: 0; top: 48px; min-width: 170px; padding: var(--lf-space-2); background: var(--lf-surface); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); box-shadow: 0 12px 30px #1f29371a; display: grid; }
+.lf-skip { position: fixed; left: 16px; top: -100px; z-index: 100; padding: var(--lf-space-2) var(--lf-space-4); background: var(--lf-surface); border: 2px solid var(--lf-accent); }
+.lf-skip:focus { top: 12px; }
+.lf-container { width: min(100%, var(--lf-width)); margin: auto; padding: 0 var(--lf-space-8); }
+.lf-home-hero { padding: 68px 0 var(--lf-space-12); display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 64px; align-items: center; }
+.lf-kicker { display: block; color: var(--lf-accent); font: 600 12px/1.6 var(--lf-mono); letter-spacing: .1em; margin-bottom: var(--lf-space-4); }
+.lf-site .lf-title { color: var(--lf-text); font-size: clamp(30px, 4vw, 46px); line-height: 1.3; letter-spacing: -.035em; margin: 0 0 20px; font-weight: 700; }
+.lf-lead { max-width: 680px; color: var(--lf-muted); margin: 0 0 var(--lf-space-6); font-size: 18px; }
+.lf-actions { display: flex; gap: var(--lf-space-3); flex-wrap: wrap; align-items: center; }
+.lf-site .lf-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: var(--lf-space-2) var(--lf-space-4); border: 1px solid var(--lf-line); border-radius: var(--lf-control-radius); background: var(--lf-surface); color: var(--lf-text); font-size: 14px; font-weight: 600; line-height: 1.6; }
+.lf-site .lf-button:hover { border-color: var(--lf-accent); text-decoration: none; }
+.lf-site .lf-button-primary { background: var(--lf-accent); color: var(--lf-surface); border-color: var(--lf-accent); }
+.lf-site .lf-button-primary:hover { background: var(--lf-accent-hover); }
+.lf-focus { border-left: 2px solid var(--lf-line); padding: var(--lf-space-2) 0 var(--lf-space-2) var(--lf-space-6); font-size: 14px; }
+.lf-focus h2 { margin: var(--lf-space-2) 0; font-size: 19px; line-height: 1.5; }
+.lf-focus p { color: var(--lf-muted); margin: var(--lf-space-2) 0 18px; }
+.lf-section { margin-bottom: var(--lf-space-12); }
+.lf-section-head { display: flex; align-items: baseline; gap: var(--lf-space-4); justify-content: space-between; margin-bottom: 20px; }
+.lf-section-head h2 { margin: 0; font-size: 23px; letter-spacing: -.02em; }
+.lf-section-head a, .lf-section-head span { font-size: 14px; }
+.lf-topic-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: var(--lf-space-4); }
+.lf-site .lf-topic { display: block; color: var(--lf-text); background: var(--lf-surface); padding: 22px; border: 1px solid var(--lf-line); border-radius: var(--lf-radius); transition: border-color .15s; }
+.lf-site .lf-topic:hover { border-color: var(--lf-accent); text-decoration: none; }
+.lf-topic small { font: 12px var(--lf-mono); color: var(--lf-muted); }
+.lf-topic h3 { margin: var(--lf-space-4) 0 var(--lf-space-2); font-size: 18px; }
+.lf-topic p { font-size: 14px; color: var(--lf-muted); margin: 0; }
+.lf-topic .lf-count { display: block; margin-top: 20px; color: var(--lf-accent); font-size: 13px; }
+.lf-entry { display: flex; justify-content: space-between; gap: var(--lf-space-6); padding: 22px 0; border-top: 1px solid var(--lf-line); }
+.lf-entry > div { min-width: 0; }
+.lf-site .lf-entry-title { font-size: 18px; line-height: 1.55; color: var(--lf-text); font-weight: 600; }
+.lf-entry-title:hover { color: var(--lf-accent); }
+.lf-entry p { font-size: 14px; color: var(--lf-muted); margin: 6px 0 0; }
+.lf-entry-meta { display: flex; align-items: flex-start; gap: var(--lf-space-2); flex-wrap: wrap; font-size: 12px; color: var(--lf-muted); padding-top: 3px; flex-shrink: 0; }
+.lf-tag { display: inline-block; border-radius: 5px; padding: 2px var(--lf-space-2); color: var(--lf-accent); background: var(--lf-tint); font-size: 12px; line-height: 1.7; }
+.lf-page-heading { padding: var(--lf-space-12) 0 26px; }
+.lf-breadcrumb { color: var(--lf-muted); font-size: 13px; padding: 18px 0; line-height: 1.7; }
+.lf-breadcrumb a { color: var(--lf-muted); }
+.lf-footer { border-top: 1px solid var(--lf-line); background: var(--lf-surface); margin-top: var(--lf-space-8); }
+.lf-footer-inner { max-width: var(--lf-width); margin: auto; padding: var(--lf-space-6) var(--lf-space-8); display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--lf-space-3); font-size: 13px; color: var(--lf-muted); }
+.lf-footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
+.lf-filter-bar { display: flex; flex-wrap: wrap; gap: var(--lf-space-3) var(--lf-space-6); padding: 20px; margin: 0 0 28px; background: var(--lf-surface); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); }
+.lf-filter-bar label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--lf-muted); flex: 1; min-width: 180px; }
+.lf-filter-bar input, .lf-filter-bar select { width: 100%; border: 1px solid var(--lf-line); border-radius: var(--lf-control-radius); background: var(--lf-surface); color: var(--lf-text); padding: 9px var(--lf-space-3); font-size: 16px; }
+.lf-result-count, .lf-empty { color: var(--lf-muted); font-size: 14px; margin-bottom: 20px; }
+.lf-directory-group { scroll-margin-top: 100px; }
+.lf-directory-group h2 { font-size: 22px; margin: var(--lf-space-8) 0 18px; }
+.lf-note { padding: 18px 22px; background: var(--lf-tint); border-left: 3px solid var(--lf-accent); border-radius: 0 var(--lf-radius) var(--lf-radius) 0; }
+.lf-prose { max-width: var(--lf-reading); margin: auto; font-size: 17px; line-height: 1.85; overflow-wrap: anywhere; }
+.lf-prose h1 { font-size: clamp(30px,4vw,40px); line-height: 1.35; }
+.lf-prose h2 { font-size: 25px; line-height: 1.5; margin: 40px 0 var(--lf-space-4); }
+.lf-prose h3 { font-size: 20px; margin: 28px 0 var(--lf-space-3); }
+.lf-prose p { margin: 0 0 20px; }
+.lf-prose pre { overflow: auto; max-width: 100%; padding: 20px; background: var(--lf-bg); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); }
+.lf-prose code { font: .88em/1.8 var(--lf-mono); }
+.lf-prose :not(pre) > code { background: var(--lf-bg); padding: 2px 5px; border-radius: 4px; }
+.lf-prose img { max-width: 100%; height: auto; }
+.lf-prose table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.lf-prose th, .lf-prose td { border-bottom: 1px solid var(--lf-line); padding: 10px var(--lf-space-3); text-align: left; }
+.lf-prose blockquote { margin: 20px 0; padding: var(--lf-space-3) 20px; border-left: 3px solid var(--lf-accent); background: var(--lf-tint); }
+.lf-scroll { overflow-x: auto; max-width: 100%; }
+@media (max-width:1000px) { .lf-topic-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .lf-home-hero { gap: var(--lf-space-8); grid-template-columns:minmax(0,1fr) 230px; } }
+@media (max-width:720px) {
+  :root { --lf-header: 66px; }
+  .lf-header-inner { padding: 10px 20px; gap: var(--lf-space-3); }
+  .lf-header-inner > .lf-nav { display: none; }
+  .lf-menu { display: block; }
+  .lf-container { padding: 0 20px; }
+  .lf-home-hero { padding: 40px 0 var(--lf-space-8); grid-template-columns: 1fr; gap: 28px; }
+  .lf-focus { padding-left: 18px; }
+  .lf-lead { font-size: 16px; }
+  .lf-entry { gap: 10px; flex-direction: column; padding: 18px 0; }
+  .lf-entry-meta { padding: 0; }
+  .lf-page-heading { padding-top: 28px; }
+  .lf-topic { padding: 18px; }
+  .lf-section-head { align-items: flex-start; }
+  .lf-footer-inner { padding: 22px 20px; }
+  .lf-prose { font-size: 16px; }
+}
+@media (max-width:420px) { .lf-topic-grid { grid-template-columns: 1fr; } .lf-filter-bar { padding: var(--lf-space-4); } }
+@media (pointer:coarse) { .lf-site button, .lf-menu summary, .lf-nav a, .lf-button { min-height: 44px; } }
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+@media print { .lf-header, .lf-footer, .lf-skip, .lf-breadcrumb, .lf-filter-bar { display:none !important; } body.lf-site { background: white; } }

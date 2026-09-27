@@ -1,0 +1,65 @@
+/* Docsify 4.13.1 adapter: only this file knows Docsify's structural classes. */
+body.lf-docs { --theme-color: var(--lf-accent); }
+.lf-docs main { min-height: calc(100vh - var(--lf-header)); height: auto; width:100%; overflow: visible; }
+.lf-docs .sidebar { width: 260px; top: var(--lf-header); bottom: 0; padding: var(--lf-space-6) 20px 64px; border-right: 1px solid var(--lf-line); background: var(--lf-bg); font-size: 14px; }
+.lf-docs .sidebar > h1 { margin: 0 0 20px; font-size: 18px; font-weight: 650; text-align: left; }
+.lf-docs .sidebar .app-name-link { color: var(--lf-text); }
+.lf-docs .sidebar-nav > ul { margin: 18px 0; }
+.lf-docs .sidebar ul, .lf-docs .sidebar ul li { padding: 0; line-height: 1.7; }
+.lf-docs .sidebar ul ul { margin-left: 0; padding-left: 10px; }
+.lf-docs .sidebar ul li a { white-space: normal; overflow-wrap: anywhere; font-size: 14px; color: var(--lf-muted); padding: 6px var(--lf-space-2); border-radius: 6px; }
+.lf-docs .sidebar ul li.active > a { border-right: 0; background: var(--lf-tint); color: var(--lf-accent); font-weight: 600; }
+.lf-docs .sidebar .search { margin: 0 0 20px; padding: 0 0 var(--lf-space-4); border-color: var(--lf-line); }
+.lf-docs .search input { font: 14px var(--lf-sans); border: 1px solid var(--lf-line); background: var(--lf-surface); border-radius: 6px; padding: 10px; }
+.lf-docs .search .matching-post { border-color: var(--lf-line); }
+.lf-docs .search h2 { font-size: 15px; }
+.lf-docs main > .content { position: relative; left: 0; margin-left: 260px; padding: var(--lf-space-4) 36px 64px; min-height: 70vh; }
+.lf-docs .markdown-section { max-width: var(--lf-reading); padding: var(--lf-space-2) 0; margin: auto; font: 17px/1.85 var(--lf-sans); color: var(--lf-text); overflow-wrap: anywhere; }
+.lf-docs .markdown-section h1 { font-size: clamp(28px,3vw,38px); line-height: 1.35; margin: var(--lf-space-3) 0 20px; color: var(--lf-text); }
+.lf-docs .markdown-section h2 { font-size: 25px; line-height: 1.5; margin: 40px 0 var(--lf-space-4); color: var(--lf-text); }
+.lf-docs .markdown-section h3 { font-size: 20px; line-height: 1.5; margin: 28px 0 var(--lf-space-3); color: var(--lf-text); }
+.lf-docs .markdown-section p { margin: 0 0 20px; }
+.lf-docs .markdown-section a { color: var(--lf-accent); font-weight: inherit; }
+.lf-docs .markdown-section h1 a, .lf-docs .markdown-section h2 a, .lf-docs .markdown-section h3 a { color: inherit; font-weight: inherit; }
+.lf-docs .markdown-section strong { color: var(--lf-text); }
+.lf-docs .markdown-section pre { position: relative; background: var(--lf-surface); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); padding: 46px 20px 20px; max-width: 100%; overflow-x: auto; line-height: 1.8; }
+.lf-docs .markdown-section pre code { color: var(--lf-text); padding: 0; white-space: pre; font: 14px/1.8 var(--lf-mono); }
+.lf-docs .markdown-section .token.content { position:static; left:auto; margin:0; padding:0; min-height:0; max-width:none; transform:none; }
+.lf-docs .markdown-section :not(pre) > code { color: var(--lf-text); background: #eaeef4; border-radius: 4px; font: .88em/1.8 var(--lf-mono); padding: 2px 5px; margin: 0 2px; }
+.lf-docs .markdown-section pre::after { right: 20px; top: 12px; color: var(--lf-muted); }
+.lf-docs .lf-copy-code { position: absolute; top: 8px; left: 12px; background: var(--lf-bg); color: var(--lf-accent); border: 1px solid var(--lf-line); border-radius: 5px; padding: var(--lf-space-1) 10px; font-size: 12px; }
+.lf-docs .markdown-section table { display: block; max-width: 100%; overflow-x: auto; font-size: 15px; border-collapse: collapse; }
+.lf-docs .markdown-section td, .lf-docs .markdown-section th { padding: 10px 14px; border: 1px solid var(--lf-line); }
+.lf-docs .markdown-section tr { border: 0; background: var(--lf-surface); }
+.lf-docs .markdown-section tr:nth-child(2n) { background: var(--lf-bg); }
+.lf-docs .markdown-section blockquote, .lf-docs .learning-intro { margin: var(--lf-space-6) 0; padding: var(--lf-space-4) 20px; background: var(--lf-tint); border-left: 3px solid var(--lf-accent); color: var(--lf-text); border-radius: 0 var(--lf-radius) var(--lf-radius) 0; }
+.lf-docs .learning-intro p, .lf-docs .markdown-section blockquote p:last-child { margin-bottom: 0; }
+.lf-docs .learning-intro a { display: inline-block; margin-top: var(--lf-space-3); }
+.lf-docs .markdown-section img { max-width: 100%; height: auto; }
+.lf-docs .lf-doc-toc { margin: var(--lf-space-6) 0; padding: var(--lf-space-3) var(--lf-space-4); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); font-size: 14px; background: var(--lf-surface); }
+.lf-docs .lf-doc-toc ul { margin: var(--lf-space-3) 0 var(--lf-space-1); padding-left: 20px; }
+.lf-docs .lf-doc-meta { font-size: 13px; color: var(--lf-muted); margin-bottom: 20px; display:flex; flex-wrap:wrap; gap:var(--lf-space-3); }
+.lf-docs .lf-doc-pager { display: flex; justify-content: space-between; gap: var(--lf-space-6); margin: var(--lf-space-12) 0 0; border-top: 1px solid var(--lf-line); padding-top: 20px; font-size: 14px; }
+.lf-docs .lf-doc-pager a { flex: 1; }
+.lf-docs .lf-doc-pager a:last-child { text-align: right; }
+.lf-docs .sidebar-toggle { position: fixed; top: auto; bottom: 16px; left: 16px; width: auto; padding: var(--lf-space-3); background: var(--lf-surface); border: 1px solid var(--lf-line); border-radius: 6px; z-index: 55; }
+.lf-docs .sidebar-toggle span { background: var(--lf-accent); }
+.lf-docs .lf-footer { margin-left: 260px; }
+.lf-docs.close .sidebar { transform: translateX(-260px); }
+.lf-docs.close main > .content, .lf-docs.close .lf-footer { margin-left: 0; }
+@media(max-width:768px) {
+  .lf-docs .sidebar { left: 0; width: min(300px,calc(100vw - 40px)); transform: translateX(-100%); z-index: 54; box-shadow: 8px 0 24px #1f293714; }
+  .lf-docs.close .sidebar { transform: translateX(0); }
+  .lf-docs main > .content, .lf-docs.close main > .content { padding: 18px 20px var(--lf-space-12); margin-left: 0; transform: none; max-width: 100%; }
+  .lf-docs .lf-footer { margin-left: 0; }
+  .lf-docs .markdown-section { font-size: 16px; }
+  .lf-docs .markdown-section h2 { font-size: 23px; }
+  .lf-docs .sidebar-toggle, .lf-docs.close .sidebar-toggle { width: auto; padding: var(--lf-space-3); }
+}
+@media print {
+  .lf-docs .sidebar,.lf-docs .sidebar-toggle,.lf-docs .lf-copy-code,.lf-docs .lf-doc-toc { display: none; }
+  .lf-docs main > .content { margin:0; padding:0; }
+  .lf-docs .markdown-section { max-width: none; }
+  .lf-docs .markdown-section pre { white-space:pre-wrap; }
+  .lf-docs .markdown-section pre code { white-space:pre-wrap; }
+}

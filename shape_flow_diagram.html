@@ -1,97 +1,28 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>shape 流水线 · 输入穿过 Transformer</title>
-<style>
-  :root{
-    --bg:#f4f7fc; --surface:#ffffff; --surface-2:#ebf0f8; --chip:#ffffff;
-    --ink:#16233f; --muted:#5b6b8c; --line:#c7d2e4; --line-2:#e1e8f3;
-    --d-b:#7c89a6; --d-h:#7a5aa8; --d-s:#0f7fb8; --d-w:#a86a12; --d-v:#c1354f;
-    --chg:#c1354f; --matrix-bg:rgba(193,53,79,.07);
-    --sans:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
-    --mono:"Cascadia Code","Cascadia Mono","JetBrains Mono",Consolas,"SF Mono",Menlo,monospace;
-  }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --bg:#0c1226; --surface:#141b31; --chip:#182238; --surface-2:#1b2440;
-      --ink:#e8edf7; --muted:#93a0be; --line:#2b3754; --line-2:#212c46;
-      --d-b:#8e9bb5; --d-h:#b29be8; --d-s:#58b6f5; --d-w:#ffb84d; --d-v:#ff7ba4;
-      --chg:#ff7ba4; --matrix-bg:rgba(255,123,164,.14);
-    }
-  }
-  :root[data-theme="dark"]{
-    --bg:#0c1226; --surface:#141b31; --chip:#182238; --surface-2:#1b2440;
-    --ink:#e8edf7; --muted:#93a0be; --line:#2b3754; --line-2:#212c46;
-    --d-b:#8e9bb5; --d-h:#b29be8; --d-s:#58b6f5; --d-w:#ffb84d; --d-v:#ff7ba4;
-    --chg:#ff7ba4; --matrix-bg:rgba(255,123,164,.14);
-  }
 
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6}
-  main{max-width:1280px;margin:0 auto;padding:48px 24px 80px}
-
-  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
-  h1{font-size:clamp(26px,4vw,40px);line-height:1.25;margin:0 0 16px;text-wrap:balance;letter-spacing:-.01em}
-  h1 .mono{font-family:var(--mono);color:var(--d-s);font-weight:700}
-  .lede{font-size:16px;color:var(--muted);max-width:72ch;margin:0 0 18px}
-  .meta{font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:inline-flex;flex-wrap:wrap;gap:6px 18px}
-  .meta b{color:var(--d-w);font-weight:700}
-
-  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:28px 0 6px}
-  .legend .hint{width:100%;font-size:12px;color:var(--muted);margin:0 0 2px}
-  .lchip{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid var(--line);border-radius:999px;background:var(--chip);font-size:13px;cursor:default;outline:none;transition:border-color .12s ease,box-shadow .12s ease}
-  .lchip:focus-visible,.lchip:hover{border-color:var(--muted);box-shadow:0 0 0 3px color-mix(in srgb,var(--d-s) 15%,transparent)}
-  .lchip .sw{width:12px;height:12px;border-radius:3px;flex:none}
-  .lchip code{font-family:var(--mono);font-size:12px}
-  .lchip[data-dim="b"] .sw{background:var(--d-b)}
-  .lchip[data-dim="h"] .sw{background:var(--d-h)}
-  .lchip[data-dim="s"] .sw{background:var(--d-s)}
-  .lchip[data-dim="w"] .sw{background:var(--d-w)}
-  .lchip[data-dim="v"] .sw{background:var(--d-v)}
-  .lchip[data-dim="mat"] .sw{background:var(--matrix-bg);border:1.5px solid var(--d-v)}
-  .lchip[data-dim="chg"] .sw{background:transparent;color:var(--chg);text-align:center;line-height:12px}
-
-  figure{margin:24px 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-  figure svg{display:block;width:100%;height:auto;min-width:1080px;color:var(--ink)}
-  figcaption{font-size:12.5px;color:var(--muted);max-width:92ch;margin-top:10px}
-
-  .points{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:40px 0 8px}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
-  .card .num{font-family:var(--mono);font-size:12px;color:var(--chg);letter-spacing:.08em;margin:0 0 6px}
-  .card h3{margin:0 0 8px;font-size:15.5px}
-  .card p{margin:0;font-size:13.5px;color:var(--muted)}
-  .card code{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--surface-2);padding:1px 5px;border-radius:5px}
-  .rest{grid-column:1/-1}
-
-  footer{margin-top:36px;font-size:12px;color:var(--muted)}
-  footer a{color:var(--d-s);text-decoration:none;border-bottom:1px solid var(--line)}
-
-  /* ---------- SVG internals ---------- */
-  svg text{font-family:var(--sans)}
-  svg .shape{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
-  svg .p{fill:var(--muted)}
-  svg .d-b{fill:var(--d-b)} svg .d-h{fill:var(--d-h)} svg .d-s{fill:var(--d-s)}
-  svg .d-w{fill:var(--d-w)} svg .d-v{fill:var(--d-v)}
-  .tlabel{font-size:14px;font-weight:600}
-  .tnote{font-size:11px;fill:var(--muted)}
-  .tracktitle{font-size:13px;font-weight:600;fill:var(--muted);letter-spacing:.04em}
-  .quiet{font-size:10.5px;fill:var(--muted);font-style:italic}
-  .ctitle{font-size:13px;font-weight:600}
-  .cnote{font-size:11px;fill:var(--muted)}
-  .chip-op{font-size:10px;fill:var(--muted);letter-spacing:.02em}
-  .chip .rect{fill:var(--chip);stroke:var(--line);stroke-width:1.2}
-  .chip.coral-edge .rect{stroke:var(--chg);stroke-width:1.8}
-  .chip.matrix .rect{fill:var(--matrix-bg);stroke:var(--d-v);stroke-width:1.4}
-  .chg-pill{fill:var(--matrix-bg);stroke:var(--chg);stroke-width:1.2}
-  .chg-text{font-size:11px;fill:var(--chg);font-weight:600}
-
-  svg.hl-b .d-b,svg.hl-h .d-h,svg.hl-s .d-s,svg.hl-w .d-w,svg.hl-v .d-v{
-    font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;text-decoration-color:currentColor
-  }
-  svg.hl-mat .chip.matrix .rect{stroke-width:2.6}
-  svg.hl-chg .chg-pill{stroke-width:2.6}
-  svg.hl-chg .chip.coral-edge .rect{stroke-width:2.6}
-</style>
 
 <a href="index.html" style="position:fixed;top:14px;left:14px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#ffffff;border:1px solid #d0d7de;border-radius:999px;color:#4f46e5;text-decoration:none;font-size:13px;font-family:system-ui,-apple-system,'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.10);">← 返回主页</a>
 
+<!-- LF:HEAD -->
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/pages/shape.css">
+<link rel="stylesheet" href="assets/css/legacy.css">
+<script src="assets/js/site.js" defer></script>
+<!-- /LF:HEAD -->
+</head><body class="lf-site" data-page="shape" data-layout="legacy">
+<!-- LF:HEADER -->
+<a class="lf-skip" href="#lf-content">跳到正文</a>
+<header class="lf-header"><div class="lf-header-inner">
+  <a class="lf-brand" href="index.html"><span class="lf-brand-mark" aria-hidden="true">L</span>Linkforfuture</a>
+  <div class="lf-nav" role="navigation" aria-label="全站导航"><a href="index.html">首页</a><a href="topics.html">专题</a><a href="diagrams.html" aria-current="page">图解实验</a><a href="work/">工作文档</a><a href="resume-weixin_43960572.html">关于我</a></div>
+  <details class="lf-menu"><summary>导航</summary><div class="lf-nav" role="navigation" aria-label="移动端全站导航"><a href="index.html">首页</a><a href="topics.html">专题</a><a href="diagrams.html" aria-current="page">图解实验</a><a href="work/">工作文档</a><a href="resume-weixin_43960572.html">关于我</a></div></details>
+</div></header>
+<div class="lf-container"><div class="lf-breadcrumb"><a href="topics.html">专题</a> / <a href="topics.html#models">模型与推理</a> / 输入如何穿过 Transformer</div></div>
+<!-- /LF:HEADER -->
+<div class="lf-legacy" data-legacy="shape" id="lf-content">
 <main>
   <p class="kicker">Transformer Internals · Shape Flow</p>
   <h1>一个批次穿过 Transformer，<span class="mono">shape</span> 怎么变</h1>
@@ -346,15 +277,9 @@
   <footer>来源：transfer.py · shape_flow.ipynb　—　想换一组数字？改 notebook 第 2 个单元格里的超参数重新运行，shape 会跟着变。</footer>
 </main>
 
-<script>
-  const fig = document.getElementById('fig');
-  document.querySelectorAll('.legend [data-dim]').forEach(chip => {
-    const dim = chip.dataset.dim;
-    const on  = () => fig.classList.add('hl-' + dim);
-    const off = () => fig.classList.remove('hl-' + dim);
-    chip.addEventListener('mouseenter', on);
-    chip.addEventListener('mouseleave', off);
-    chip.addEventListener('focus', on);
-    chip.addEventListener('blur', off);
-  });
-</script>
+<script src="assets/js/pages/shape.js" defer></script>
+</div>
+<!-- LF:FOOTER -->
+<footer class="lf-footer"><div class="lf-footer-inner"><span>Linkforfuture · 记录学习、工作与思考</span><div class="lf-footer-links"><a href="https://github.com/linkforfuture/linkforfuture.github.io">GitHub</a><a href="topics.html">全部内容</a><a href="resume-weixin_43960572.html#learning-path">学习路径</a></div></div></footer>
+<!-- /LF:FOOTER -->
+</body></html>

@@ -1,4 +1,5 @@
-- [← 返回主页](https://linkforfuture.github.io/)
+<!-- Generated from content-index.json by scripts/build_site.py. -->
+
 
 - 首页
   - [关于本站](README.md)

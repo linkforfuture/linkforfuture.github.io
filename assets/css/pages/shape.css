@@ -1,0 +1,72 @@
+/* Page-specific diagrams and interactions; common chrome lives in site.css. */
+@layer legacy {
+.lf-legacy[data-legacy="shape"] {--bg:#f4f7fc; --surface:#ffffff; --surface-2:#ebf0f8; --chip:#ffffff;
+    --ink:#16233f; --muted:#5b6b8c; --line:#c7d2e4; --line-2:#e1e8f3;
+    --d-b:#7c89a6; --d-h:#7a5aa8; --d-s:#0f7fb8; --d-w:#a86a12; --d-v:#c1354f;
+    --chg:#c1354f; --matrix-bg:rgba(193,53,79,.07);
+    --sans:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono","JetBrains Mono",Consolas,"SF Mono",Menlo,monospace;}
+.lf-legacy[data-legacy="shape"] * {box-sizing:border-box}
+.lf-legacy[data-legacy="shape"] {margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6}
+.lf-legacy[data-legacy="shape"] main {max-width:1280px;margin:0 auto;padding:48px 24px 80px}
+.lf-legacy[data-legacy="shape"] .kicker {font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+.lf-legacy[data-legacy="shape"] h1 {font-size:clamp(26px,4vw,40px);line-height:1.25;margin:0 0 16px;text-wrap:balance;letter-spacing:-.01em}
+.lf-legacy[data-legacy="shape"] h1 .mono {font-family:var(--mono);color:var(--d-s);font-weight:700}
+.lf-legacy[data-legacy="shape"] .lede {font-size:16px;color:var(--muted);max-width:72ch;margin:0 0 18px}
+.lf-legacy[data-legacy="shape"] .meta {font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:inline-flex;flex-wrap:wrap;gap:6px 18px}
+.lf-legacy[data-legacy="shape"] .meta b {color:var(--d-w);font-weight:700}
+.lf-legacy[data-legacy="shape"] .legend {display:flex;flex-wrap:wrap;gap:10px;margin:28px 0 6px}
+.lf-legacy[data-legacy="shape"] .legend .hint {width:100%;font-size:12px;color:var(--muted);margin:0 0 2px}
+.lf-legacy[data-legacy="shape"] .lchip {display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid var(--line);border-radius:999px;background:var(--chip);font-size:13px;cursor:default;outline:none;transition:border-color .12s ease,box-shadow .12s ease}
+.lf-legacy[data-legacy="shape"] .lchip:focus-visible,
+.lf-legacy[data-legacy="shape"] .lchip:hover {border-color:var(--muted);box-shadow:0 0 0 3px color-mix(in srgb,var(--d-s) 15%,transparent)}
+.lf-legacy[data-legacy="shape"] .lchip .sw {width:12px;height:12px;border-radius:3px;flex:none}
+.lf-legacy[data-legacy="shape"] .lchip code {font-family:var(--mono);font-size:12px}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="b"] .sw {background:var(--d-b)}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="h"] .sw {background:var(--d-h)}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="s"] .sw {background:var(--d-s)}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="w"] .sw {background:var(--d-w)}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="v"] .sw {background:var(--d-v)}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="mat"] .sw {background:var(--matrix-bg);border:1.5px solid var(--d-v)}
+.lf-legacy[data-legacy="shape"] .lchip[data-dim="chg"] .sw {background:transparent;color:var(--chg);text-align:center;line-height:12px}
+.lf-legacy[data-legacy="shape"] figure {margin:24px 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.lf-legacy[data-legacy="shape"] figure svg {display:block;width:100%;height:auto;min-width:1080px;color:var(--ink)}
+.lf-legacy[data-legacy="shape"] figcaption {font-size:12.5px;color:var(--muted);max-width:92ch;margin-top:10px}
+.lf-legacy[data-legacy="shape"] .points {display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:40px 0 8px}
+.lf-legacy[data-legacy="shape"] .card {background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.lf-legacy[data-legacy="shape"] .card .num {font-family:var(--mono);font-size:12px;color:var(--chg);letter-spacing:.08em;margin:0 0 6px}
+.lf-legacy[data-legacy="shape"] .card h3 {margin:0 0 8px;font-size:15.5px}
+.lf-legacy[data-legacy="shape"] .card p {margin:0;font-size:13.5px;color:var(--muted)}
+.lf-legacy[data-legacy="shape"] .card code {font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--surface-2);padding:1px 5px;border-radius:5px}
+.lf-legacy[data-legacy="shape"] .rest {grid-column:1/-1}
+.lf-legacy[data-legacy="shape"] footer {margin-top:36px;font-size:12px;color:var(--muted)}
+.lf-legacy[data-legacy="shape"] footer a {color:var(--d-s);text-decoration:none;border-bottom:1px solid var(--line)}
+.lf-legacy[data-legacy="shape"] svg text {font-family:var(--sans)}
+.lf-legacy[data-legacy="shape"] svg .shape {font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+.lf-legacy[data-legacy="shape"] svg .p {fill:var(--muted)}
+.lf-legacy[data-legacy="shape"] svg .d-b {fill:var(--d-b)}
+.lf-legacy[data-legacy="shape"] svg .d-h {fill:var(--d-h)}
+.lf-legacy[data-legacy="shape"] svg .d-s {fill:var(--d-s)}
+.lf-legacy[data-legacy="shape"] svg .d-w {fill:var(--d-w)}
+.lf-legacy[data-legacy="shape"] svg .d-v {fill:var(--d-v)}
+.lf-legacy[data-legacy="shape"] .tlabel {font-size:14px;font-weight:600}
+.lf-legacy[data-legacy="shape"] .tnote {font-size:11px;fill:var(--muted)}
+.lf-legacy[data-legacy="shape"] .tracktitle {font-size:13px;font-weight:600;fill:var(--muted);letter-spacing:.04em}
+.lf-legacy[data-legacy="shape"] .quiet {font-size:10.5px;fill:var(--muted);font-style:italic}
+.lf-legacy[data-legacy="shape"] .ctitle {font-size:13px;font-weight:600}
+.lf-legacy[data-legacy="shape"] .cnote {font-size:11px;fill:var(--muted)}
+.lf-legacy[data-legacy="shape"] .chip-op {font-size:10px;fill:var(--muted);letter-spacing:.02em}
+.lf-legacy[data-legacy="shape"] .chip .rect {fill:var(--chip);stroke:var(--line);stroke-width:1.2}
+.lf-legacy[data-legacy="shape"] .chip.coral-edge .rect {stroke:var(--chg);stroke-width:1.8}
+.lf-legacy[data-legacy="shape"] .chip.matrix .rect {fill:var(--matrix-bg);stroke:var(--d-v);stroke-width:1.4}
+.lf-legacy[data-legacy="shape"] .chg-pill {fill:var(--matrix-bg);stroke:var(--chg);stroke-width:1.2}
+.lf-legacy[data-legacy="shape"] .chg-text {font-size:11px;fill:var(--chg);font-weight:600}
+.lf-legacy[data-legacy="shape"] svg.hl-b .d-b,
+.lf-legacy[data-legacy="shape"] svg.hl-h .d-h,
+.lf-legacy[data-legacy="shape"] svg.hl-s .d-s,
+.lf-legacy[data-legacy="shape"] svg.hl-w .d-w,
+.lf-legacy[data-legacy="shape"] svg.hl-v .d-v {font-weight:800;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px;text-decoration-color:currentColor}
+.lf-legacy[data-legacy="shape"] svg.hl-mat .chip.matrix .rect {stroke-width:2.6}
+.lf-legacy[data-legacy="shape"] svg.hl-chg .chg-pill {stroke-width:2.6}
+.lf-legacy[data-legacy="shape"] svg.hl-chg .chip.coral-edge .rect {stroke-width:2.6}
+}

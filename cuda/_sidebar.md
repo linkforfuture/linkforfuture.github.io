@@ -1,4 +1,5 @@
-- [← 返回个人主页](../index.html ':ignore')
+<!-- Generated from content-index.json by scripts/build_site.py. -->
+
 
 - 开始学习
   - [学习路线](README.md)

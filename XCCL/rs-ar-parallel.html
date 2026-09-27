@@ -5,236 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="HCCL ReduceScatter / AllReduce Parallel 图解：两个维度逐步归约再分散，AllReduce 再沿反向路径 AllGather 恢复完整结果。逐阶段数清每个 rank 持有多少、发给谁、发多少字节。">
 <title>ReduceScatter / AllReduce Parallel · 逐步归约，反向恢复 · Linkforfuture</title>
-<style>
-:root{
-  --bg:#f8f9fc; --paper:#fff; --ink:#222d43; --muted:#627087; --line:#e2e6ef;
-  --purple:#6255ce; --purple-bg:#eeecfc; --purple-line:#c7bff0;
-  --teal:#117b70; --teal-bg:#e7f5f1; --teal-line:#b5dcd4;
-  --amber:#a96a17; --amber-bg:#fbf1e0; --amber-line:#e6cfa6;
-  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
-  --radius:16px;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:96px}
-body{margin:0;background:var(--bg);color:var(--ink);line-height:1.85;font-size:17px;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-  -webkit-font-smoothing:antialiased}
-a{color:var(--purple);text-decoration:none}
-a:hover{text-decoration:underline}
-p{margin:0 0 16px}
-h1,h2,h3{line-height:1.4;letter-spacing:-.02em}
-h2,h3{margin:0}
-code,pre{font-family:var(--mono)}
-p code,li code,td code{background:#eef0f6;border-radius:4px;padding:2px 5px;font-size:.86em;overflow-wrap:anywhere}
-svg{max-width:100%;height:auto;display:block}
-:focus-visible{outline:3px solid #7769e4;outline-offset:3px}
 
-/* ---------- 顶栏 ---------- */
-.site-header{height:70px;padding:0 40px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);
-  display:flex;align-items:center;justify-content:space-between;gap:20px;position:sticky;top:0;z-index:20}
-.brand{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:750;color:var(--ink);white-space:nowrap}
-.brand:hover{text-decoration:none}
-.brand-mark{background:var(--ink);color:#fff;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;font-size:15px}
-.brand-sub{font-size:13px;color:var(--muted);font-weight:400;padding-left:10px;border-left:1px solid var(--line)}
-.header-actions{display:flex;gap:22px;font-size:13px}
-
-/* ---------- 骨架 ---------- */
-.page-shell{max-width:1400px;margin:auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:60px;padding:0 44px}
-.sidebar{position:sticky;top:110px;align-self:start;padding:6px 0 30px}
-.sidebar-label{font-size:10px;letter-spacing:.14em;font-weight:750;color:var(--muted)}
-.sidebar-title{font-size:21px;font-weight:700;margin:14px 0 26px;line-height:1.5}
-.sidebar nav{display:flex;flex-direction:column;gap:5px}
-.sidebar nav a{font-size:13px;padding:9px 12px;display:flex;gap:11px;border-radius:7px;color:var(--muted)}
-.sidebar nav a:hover{text-decoration:none;background:#f1f3f8}
-.sidebar nav a span{font-family:var(--mono);font-size:11px;color:#919aab;padding-top:1px}
-.sidebar nav a.active{background:var(--purple-bg);color:var(--purple);font-weight:650}
-.sidebar nav a.active span{color:var(--purple)}
-.sidebar-foot{border-top:1px solid var(--line);margin-top:30px;padding-top:18px;font-size:11px;color:var(--muted);line-height:2}
-.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-right:6px}
-main{min-width:0;max-width:1000px;padding-bottom:60px}
-
-/* ---------- 章节 ---------- */
-.chapter{padding:58px 0;border-bottom:1px solid var(--line);scroll-margin-top:24px}
-.chapter:last-of-type{border-bottom:0}
-.hero{padding-top:52px}
-.eyebrow{font-size:10px;letter-spacing:.14em;font-weight:750;color:var(--purple);margin-bottom:20px}
-h1{font-size:clamp(32px,3.6vw,52px);font-weight:780;margin:0 0 20px;line-height:1.25;letter-spacing:-.04em}
-h1>span{color:var(--purple)}
-.hero-description{color:var(--muted);font-size:18px;line-height:1.9;margin-bottom:24px}
-.hero-meta{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
-.hero-meta span::before{content:"✓";margin-right:6px;color:var(--teal)}
-.section-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:26px}
-.section-number{font-family:var(--mono);color:var(--purple);font-size:14px;padding-top:6px}
-.section-heading h2{font-size:27px;font-weight:720;margin-bottom:8px}
-.section-heading p{color:var(--muted);font-size:15px;margin:0}
-.lead{font-size:17px;line-height:1.9;margin-bottom:20px}
-.lead b{color:var(--ink)}
-h3.sub{font-size:18px;font-weight:700;margin:30px 0 14px}
-
-/* ---------- 图 ---------- */
-.figure{border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px 16px 12px;margin:22px 0}
-.figure .dg{width:100%;min-width:560px}
-.diagram-scroll{overflow-x:auto}
-.figcap{color:var(--muted);font-size:12.5px;line-height:1.8;margin:10px 2px 0}
-.figcap b{color:var(--ink);font-weight:600}
-
-/* ---------- SVG 通用 ---------- */
-.dg text{font-size:12.5px;fill:#3c4a5f}
-.dg .lb{font-size:11.5px;fill:#627087}
-.dg .ttl{font-size:13px;font-weight:700;fill:#222d43}
-.dg .mono{font-family:var(--mono)}
-.dg .sm{font-size:11px}
-.dg .box{fill:#fff;stroke:#c9cfdd;stroke-width:1.4}
-.dg .bA{fill:#eeecfc;stroke:#c7bff0;stroke-width:1.4}
-.dg .bB{fill:#e7f5f1;stroke:#b5dcd4;stroke-width:1.4}
-.dg .bOut{fill:#fbf1e0;stroke:#e6cfa6;stroke-width:1.4}
-.dg .bGray{fill:#f2f4fa;stroke:#d9dfea;stroke-width:1.4}
-.dg .ln{stroke:#c9cfdd;stroke-width:1.6;fill:none}
-.dg .lMesh{stroke:#6255ce;stroke-width:1.6;fill:none}
-.dg .lNhr{stroke:#117b70;stroke-width:1.6;fill:none}
-.dg .lSoft{stroke:#c9cfdd;stroke-width:1.2;fill:none}
-.dg .dash{stroke:#a96a17;stroke-width:1.4;stroke-dasharray:5 5;fill:none}
-.dg .dashSoft{stroke:#c9cfdd;stroke-width:1.2;stroke-dasharray:4 4;fill:none}
-.dg .tA{fill:#4c429c;font-weight:650}
-.dg .tB{fill:#0f6d63;font-weight:650}
-.dg .tMesh{fill:#6255ce;font-weight:650}
-.dg .tNhr{fill:#117b70;font-weight:650}
-
-/* ---------- 要点框 ---------- */
-.keypoints{background:#f2f4fa;border:1px solid var(--line);border-left:3px solid var(--purple);border-radius:12px;padding:16px 22px;margin:22px 0}
-.keypoints .kp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;letter-spacing:.02em}
-.keypoints ul{margin:0;padding-left:19px}
-.keypoints li{margin:6px 0;font-size:15px;color:#3c4a5f}
-.keypoints li::marker{color:var(--purple)}
-.keypoints code{background:#e6e9f3}
-.note{font-size:13.5px;color:var(--muted);line-height:1.9;margin:18px 0 0}
-.note b{color:var(--ink)}
-.warn{background:#fdf6ec;border:1px solid var(--amber-line);border-left:3px solid var(--amber);border-radius:12px;padding:16px 22px;margin:22px 0;font-size:14.5px;color:#5a4526}
-.warn .wp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;color:var(--amber)}
-.warn code{background:#f6e9d4}
-.derive{background:#f2f0fc;border:1px dashed var(--purple-line);border-radius:12px;padding:16px 22px;margin:22px 0;font-size:14.5px;color:#3c4a5f}
-.derive .dp-title{font-weight:750;font-size:13.5px;margin-bottom:7px;color:var(--purple);letter-spacing:.02em}
-.derive code{background:#e6e3f8}
-
-/* ---------- 表格 ---------- */
-.table-scroll{overflow-x:auto;margin:22px 0}
-table{width:100%;border-collapse:collapse;background:#fff;font-size:14px;min-width:520px}
-th,td{border:1px solid var(--line);padding:10px 13px;text-align:left;vertical-align:top}
-th{background:#f1f0f8;font-weight:650;font-size:13px}
-tbody tr:nth-child(even){background:#fbfcfe}
-td.num,th.num{font-family:var(--mono);font-size:13px;white-space:nowrap}
-.tag-a,.tag-b{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap}
-.tag-a{background:var(--purple-bg);color:var(--purple)}
-.tag-b{background:var(--teal-bg);color:var(--teal)}
-.tag-mesh,.tag-nhr{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;white-space:nowrap}
-.tag-mesh{background:var(--purple-bg);color:var(--purple)}
-.tag-nhr{background:var(--teal-bg);color:var(--teal)}
-.tag-lv{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;background:#fbf1e0;color:var(--amber);white-space:nowrap}
-
-/* ---------- 公式 ---------- */
-.formula{border:1px solid var(--purple-line);background:#f2f0fc;border-radius:12px;padding:20px 24px;margin:22px 0;
-  font-family:var(--mono);font-size:15px;line-height:2.1;overflow-x:auto}
-.formula .flabel{font-family:inherit;font-size:11px;color:var(--muted);letter-spacing:.1em;font-weight:700;display:block;margin-bottom:8px}
-.formula .row{white-space:nowrap}
-.formula .hi{color:var(--purple);font-weight:700}
-
-/* ---------- 交互面板 ---------- */
-.panel{border:1px solid var(--line);border-radius:var(--radius);background:#fff;padding:24px;margin:24px 0}
-.panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
-.panel-head h3{font-size:18px}
-.mini-label{font-size:10px;letter-spacing:.13em;font-weight:750;color:var(--muted)}
-.pill{font-size:11px;color:var(--muted);border:1px solid var(--line);background:#fafbfe;padding:4px 10px;border-radius:6px;white-space:nowrap}
-.controls{display:grid;grid-template-columns:110px 110px 130px minmax(0,1fr);gap:20px;align-items:end;margin-bottom:22px}
-.controls label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:8px}
-select{font:inherit;font-size:14px;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink)}
-input[type=range]{width:100%;accent-color:var(--purple);cursor:pointer;min-height:24px}
-.rho-head{display:flex;justify-content:space-between;align-items:baseline}
-.rho-head output{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--purple)}
-.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
-.readout>div{display:flex;flex-direction:column;gap:3px}
-.readout small{font-size:11.5px;color:var(--muted)}
-.readout strong{font-family:var(--mono);font-size:20px}
-.readout .c-mesh{color:var(--purple)} .readout .c-nhr{color:var(--teal)} .readout .c-sum{color:var(--ink)}
-.verdict{background:#f4f2fc;border-radius:10px;padding:16px 20px;margin-top:20px;font-size:14.5px;color:#3c4a5f}
-.verdict b{color:var(--purple)}
-.legend-inline{display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:12px 2px 0}
-.legend-inline i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
-
-/* ---------- 代码 ---------- */
-.codemap{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;margin:22px 0}
-.codemap .cm-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line);align-items:baseline}
-.codemap .cm-row:last-child{border-bottom:0}
-.codemap .cm-path{font-family:var(--mono);font-size:12.5px;color:#4c429c;overflow-wrap:anywhere}
-.codemap .cm-what{font-size:12.5px;color:var(--muted);text-align:right;white-space:nowrap}
-pre{background:#202b40;color:#e1e7f2;padding:18px 20px;border-radius:12px;overflow:auto;font-size:13px;line-height:1.9;margin:22px 0}
-pre .c{color:#8fa3c4}
-pre .k{color:#c792ea}
-pre .s{color:#a5d6a7}
-
-/* ---------- 细节折叠 ---------- */
-details{border:1px solid var(--line);border-radius:12px;background:#fff;margin:14px 0}
-summary{cursor:pointer;padding:15px 20px;font-size:14.5px;font-weight:650}
-details[open] summary{border-bottom:1px solid var(--line)}
-details .dc{padding:18px 22px;font-size:14.5px;color:#3c4a5f}
-details .dc p:last-child,details .dc ul:last-child{margin-bottom:0}
-details .dc ul{padding-left:20px}
-
-/* ---------- 页脚 ---------- */
-.article-footer{padding:34px 0 50px;font-size:12px;color:var(--muted)}
-.article-footer .strong{color:var(--ink);font-weight:650;font-size:13px}
-.article-footer code{font-size:11px;overflow-wrap:anywhere}
-
-.mobile-nav{display:none}
-@media(max-width:1120px){
-  .page-shell{grid-template-columns:190px minmax(0,1fr);gap:34px;padding:0 30px}
-  .site-header{padding:0 30px}
-  .sidebar-title{font-size:18px}
-  .controls{grid-template-columns:100px 100px 120px minmax(0,1fr);gap:14px}
-}
-@media(max-width:880px){
-  .sidebar{display:none}
-  .page-shell{display:block;padding:0 26px}
-  .mobile-nav{display:flex;overflow-x:auto;gap:8px;padding:10px 26px;background:#fff;border-bottom:1px solid var(--line);
-    position:sticky;top:70px;z-index:19;scrollbar-width:thin}
-  .mobile-nav a{white-space:nowrap;font-size:12px;padding:5px 9px;color:var(--muted);border-radius:6px}
-  .mobile-nav a.active{background:var(--purple-bg);color:var(--purple)}
-  html{scroll-padding-top:140px}
-  .chapter{padding:42px 0}
-  .controls{grid-template-columns:1fr 1fr;gap:14px}
-  .controls .rho-wrap{grid-column:1/-1}
-}
-@media(max-width:640px){
-  body{font-size:16px}
-  .site-header{height:60px;padding:0 17px;gap:10px}
-  .brand{font-size:14px;gap:8px}
-  .brand-mark{width:25px;height:25px;font-size:13px}
-  .brand-sub{display:none}
-  .header-actions{font-size:11.5px;gap:13px}
-  .page-shell{padding:0 17px}
-  .mobile-nav{top:60px;padding:8px 17px}
-  html{scroll-padding-top:126px}
-  h1{font-size:31px}
-  .hero-description{font-size:16px}
-  .section-heading h2{font-size:22px}
-  .readout{grid-template-columns:1fr;gap:10px}
-  .codemap .cm-row{grid-template-columns:1fr;gap:4px}
-  .codemap .cm-what{text-align:left}
-  .figure{padding:12px 10px 8px}
-  .figure .dg{min-width:640px}
-  table{font-size:12.5px;min-width:480px}
-}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
-@media print{
-  .site-header,.sidebar,.mobile-nav,.controls{display:none!important}
-  .page-shell{display:block;padding:0;max-width:none}
-  .chapter{padding:22px 0}
-  .diagram-scroll{overflow:visible}
-  .figure .dg{min-width:0}
-  .chapter{break-inside:avoid}
-}
-</style>
+<!-- LF:HEAD -->
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<link rel="stylesheet" href="../assets/css/pages/reduce-scatter.css">
+<link rel="stylesheet" href="../assets/css/legacy.css">
+<script src="../assets/js/site.js" defer></script>
+<!-- /LF:HEAD -->
 </head>
-<body>
+<body class="lf-site" data-page="reduce-scatter" data-layout="legacy">
+<!-- LF:HEADER -->
+<a class="lf-skip" href="#lf-content">跳到正文</a>
+<header class="lf-header"><div class="lf-header-inner">
+  <a class="lf-brand" href="../index.html"><span class="lf-brand-mark" aria-hidden="true">L</span>Linkforfuture</a>
+  <div class="lf-nav" role="navigation" aria-label="全站导航"><a href="../index.html">首页</a><a href="../topics.html">专题</a><a href="../diagrams.html" aria-current="page">图解实验</a><a href="../work/">工作文档</a><a href="../resume-weixin_43960572.html">关于我</a></div>
+  <details class="lf-menu"><summary>导航</summary><div class="lf-nav" role="navigation" aria-label="移动端全站导航"><a href="../index.html">首页</a><a href="../topics.html">专题</a><a href="../diagrams.html" aria-current="page">图解实验</a><a href="../work/">工作文档</a><a href="../resume-weixin_43960572.html">关于我</a></div></details>
+</div></header>
+<div class="lf-container"><div class="lf-breadcrumb"><a href="../topics.html">专题</a> / <a href="../topics.html#communication">集合通信</a> / ReduceScatter / AllReduce Parallel</div></div>
+<!-- /LF:HEADER -->
+<div class="lf-legacy" data-legacy="reduce-scatter" id="lf-content">
 <a href="#main" style="position:fixed;top:-100px;left:20px;background:#222d43;color:#fff;padding:10px 20px;z-index:100;border-radius:8px">跳到正文</a>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -254,14 +44,7 @@ details .dc ul{padding-left:20px}
   </defs>
 </svg>
 
-<header class="site-header">
-  <a class="brand" href="../index.html"><span class="brand-mark">L</span>Linkforfuture<span class="brand-sub">/ 学习笔记</span></a>
-  <div class="header-actions">
-    <a href="study.html">XCCL笔记</a>
-    <a href="hccl-selector.html">Selector图解</a>
-    <a href="allgather-parallel.html">AllGather Parallel</a>
-  </div>
-</header>
+
 
 <nav class="mobile-nav" aria-label="章节导航">
   <a href="#s1">01 为什么放在一起</a><a href="#s2">02 口径与ρ语义</a><a href="#s3">03 RS 切分</a>
@@ -1391,163 +1174,10 @@ details .dc ul{padding-left:20px}
   </main>
 </div>
 
-<script>
-(function () {
-  'use strict';
-
-  var PL_X = 70, PL_W = 540, PL_Y = 30, PL_H = 210;
-
-  var selM = document.getElementById('sel-m');
-  var selN = document.getElementById('sel-n');
-  var selAlg = document.getElementById('sel-alg');
-  var rng = document.getElementById('rng-rho');
-  var outRho = document.getElementById('out-rho');
-  var lineMesh = document.getElementById('tf-mesh');
-  var lineNhr = document.getElementById('tf-nhr');
-  var cross = document.getElementById('tf-cross');
-  var crossGd = document.getElementById('tf-cross-gd');
-  var crossLb = document.getElementById('tf-cross-lb');
-  var tk1 = document.getElementById('tf-t1'), tk2 = document.getElementById('tf-t2');
-  var tk1Lb = document.getElementById('tf-t1-lb'), tk2Lb = document.getElementById('tf-t2-lb');
-  var lbMesh = document.getElementById('lb-mesh'), lbNhr = document.getElementById('lb-nhr'), lbSum = document.getElementById('lb-sum');
-  var valMesh = document.getElementById('val-mesh'), valNhr = document.getElementById('val-nhr'), valSum = document.getElementById('val-sum');
-  var verdict = document.getElementById('verdict');
-  var pill = document.getElementById('rs-pill');
-
-  if (!selM || !rng) { return; }
-
-  // ---- 流量模型（均匀分片，单位：RS 为 d 字节，AR 为 S 字节）----
-  function vMeshRS(M, N, r) { return (M - 1) * (N * r + (1 - r)); }
-  function vNhrRS(M, N, r) { return (N - 1) * (M * (1 - r) + r); }
-  function vMeshAR(M, N, r) { return 2 * (M - 1) * (r / M + (1 - r) / (M * N)); }
-  function vNhrAR(M, N, r) { return 2 * (N - 1) * ((1 - r) / N + r / (M * N)); }
-  function vMesh(M, N, r, alg) { return alg === 'ar' ? vMeshAR(M, N, r) : vMeshRS(M, N, r); }
-  function vNhr(M, N, r, alg) { return alg === 'ar' ? vNhrAR(M, N, r) : vNhrRS(M, N, r); }
-
-  function xOf(r) { return PL_X + PL_W * r; }
-  function yOf(frac) { return PL_Y + PL_H * (1 - frac); }
-  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
-  function curve(fn, M, N, alg, other) {
-    var pts = [];
-    for (var k = 0; k <= 100; k++) {
-      var r = k / 100;
-      var v = fn(M, N, r, alg);
-      var tot = v + other(M, N, r, alg);
-      var frac = tot > 0 ? v / tot : 0;
-      pts.push(xOf(r).toFixed(1) + ',' + yOf(frac).toFixed(1));
-    }
-    return pts.join(' ');
-  }
-
-  function fmt(x) {
-    if (!isFinite(x)) { return '—'; }
-    if (x >= 1000) { return x.toFixed(0); }
-    if (x >= 100) { return x.toFixed(1); }
-    return x.toFixed(2);
-  }
-
-  function placeTick(el, elLb, r) {
-    var x = xOf(clamp(r, 0, 1)).toFixed(1);
-    el.setAttribute('x1', x); el.setAttribute('x2', x);
-    elLb.setAttribute('x', x);
-  }
-
-  function render() {
-    var M = parseInt(selM.value, 10);
-    var N = parseInt(selN.value, 10);
-    var alg = selAlg.value;
-    var r = parseFloat(rng.value);
-    var unit = alg === 'ar' ? '× S' : '× d';
-
-    outRho.textContent = r.toFixed(2);
-    pill.textContent = alg === 'ar'
-      ? 'AllReduce · M=' + M + ', N=' + N + '，S = P·d'
-      : 'ReduceScatter · M=' + M + ', N=' + N + '，d = 每 rank 输出';
-
-    lineMesh.setAttribute('points', curve(vMesh, M, N, alg, vNhr));
-    lineNhr.setAttribute('points', curve(vNhr, M, N, alg, vMesh));
-
-    // 总量平衡点：两侧总量相等（三个算子公式一致）
-    var rStar = (M * N - 2 * M + 1) / (2 * (M - 1) * (N - 1));
-    rStar = clamp(rStar, 0, 1);
-    var cx = xOf(rStar), cy = yOf(0.5);
-    cross.setAttribute('cx', cx.toFixed(1));
-    cross.setAttribute('cy', cy.toFixed(1));
-    crossGd.setAttribute('x1', cx.toFixed(1));
-    crossGd.setAttribute('x2', cx.toFixed(1));
-    crossLb.setAttribute('x', clamp(cx, PL_X + 56, PL_X + PL_W - 56).toFixed(1));
-    crossLb.setAttribute('y', (cy - 16 > PL_Y + 8 ? cy - 15 : cy + 24).toFixed(1));
-    crossLb.textContent = '均衡点 ρ* = ' + rStar.toFixed(2);
-
-    // 分阶段平衡点
-    var r1 = M * (N - 1) / (N * (M - 1) + M * (N - 1));
-    var r2 = (M - 1) / ((M - 1) + (N - 1));
-    placeTick(tk1, tk1Lb, r1);
-    placeTick(tk2, tk2Lb, r2);
-    tk1Lb.textContent = 'ρ₁=' + r1.toFixed(2);
-    tk2Lb.textContent = 'ρ₂=' + r2.toFixed(2);
-    tk1Lb.setAttribute('y', '258');
-    tk2Lb.setAttribute('y', '272');
-
-    var vm = vMesh(M, N, r, alg), vn = vNhr(M, N, r, alg), vt = vm + vn;
-    lbMesh.textContent = 'Mesh 发送量（' + unit + '）';
-    lbNhr.textContent = 'NHR 发送量（' + unit + '）';
-    lbSum.textContent = alg === 'ar' ? '总量 = 2(P−1)/P · S' : '总量 = (P−1) · d';
-    valMesh.textContent = fmt(vm) + ' ' + unit;
-    valNhr.textContent = fmt(vn) + ' ' + unit;
-    valSum.textContent = fmt(vt) + ' ' + unit;
-
-    var fMesh = vt > 0 ? vm / vt : 0;
-    var who = Math.abs(fMesh - 0.5) < 0.02
-      ? '两个维度几乎均分流量。'
-      : (fMesh > 0.5
-        ? 'Mesh 承担了 <b>' + (fMesh * 100).toFixed(0) + '%</b> 的流量，NHR 只占 ' + ((1 - fMesh) * 100).toFixed(0) + '%。'
-        : 'NHR 承担了 <b>' + ((1 - fMesh) * 100).toFixed(0) + '%</b> 的流量，Mesh 只占 ' + (fMesh * 100).toFixed(0) + '%。');
-
-    verdict.innerHTML = '当前 ρ = ' + r.toFixed(2) + '：' + who +
-      ' 总量始终是 <b>' + fmt(vt) + ' ' + unit + '</b>，与 ρ 无关 —— ' +
-      'ρ 只是在两个维度之间重新分配。总量平衡点在 ρ* = ' + rStar.toFixed(2) +
-      '，而两个阶段各自的配平点落在 ρ₁ = ' + r1.toFixed(2) + ' 与 ρ₂ = ' + r2.toFixed(2) +
-      '（M = N 时三者才会重合到 0.5）。';
-  }
-
-  selM.addEventListener('change', render);
-  selN.addEventListener('change', render);
-  selAlg.addEventListener('change', render);
-  rng.addEventListener('input', render);
-  render();
-})();
-
-(function () {
-  'use strict';
-  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a, .mobile-nav a'));
-  var targets = [];
-  links.forEach(function (a) {
-    var id = (a.getAttribute('href') || '').replace('#', '');
-    var el = id && document.getElementById(id);
-    if (el && targets.indexOf(el) === -1) { targets.push(el); }
-  });
-  if (!targets.length || !('IntersectionObserver' in window)) { return; }
-
-  function mark(id) {
-    links.forEach(function (a) {
-      a.classList.toggle('active', a.getAttribute('href') === '#' + id);
-    });
-  }
-  var seen = {};
-  var obs = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
-    var best = null, bestV = 0;
-    targets.forEach(function (t) {
-      var v = seen[t.id] || 0;
-      if (v > bestV) { bestV = v; best = t.id; }
-    });
-    if (best) { mark(best); }
-  }, { rootMargin: '-90px 0px -55% 0px', threshold: [0, 0.15, 0.4, 0.75, 1] });
-
-  targets.forEach(function (t) { obs.observe(t); });
-})();
-</script>
+<script src="../assets/js/pages/reduce-scatter.js" defer></script>
+</div>
+<!-- LF:FOOTER -->
+<footer class="lf-footer"><div class="lf-footer-inner"><span>Linkforfuture · 记录学习、工作与思考</span><div class="lf-footer-links"><a href="https://github.com/linkforfuture/linkforfuture.github.io">GitHub</a><a href="../topics.html">全部内容</a><a href="../resume-weixin_43960572.html#learning-path">学习路径</a></div></div></footer>
+<!-- /LF:FOOTER -->
 </body>
 </html>

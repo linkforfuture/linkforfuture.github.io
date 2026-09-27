@@ -1,0 +1,80 @@
+/* Migration boundary. Diagram internals live in @layer legacy; shared appearance wins.
+   New pages use templates and lf-* components, not additional legacy overrides. */
+.lf-legacy {
+  --bg:var(--lf-bg); --paper:var(--lf-surface); --card:var(--lf-surface); --surface:var(--lf-surface);
+  --ink:var(--lf-text); --ink2:var(--lf-muted); --ink-2:var(--lf-muted); --ink-3:var(--lf-muted);
+  --text:var(--lf-text); --muted:var(--lf-muted); --line:var(--lf-line); --border:var(--lf-line);
+  --mono:var(--lf-mono); --sans:var(--lf-sans); --radius:var(--lf-radius);
+  --accent:var(--lf-accent);
+  font-family:var(--lf-sans); background:var(--lf-bg); color:var(--lf-text);
+}
+.lf-legacy[data-legacy="selector"],.lf-legacy[data-legacy="allgather"],.lf-legacy[data-legacy="reduce-scatter"] {
+  --purple:var(--lf-accent); --purple-light:var(--lf-tint); --purple-bg:var(--lf-tint);
+}
+.lf-legacy :is(a,button,input,select,summary):focus-visible { outline:3px solid var(--lf-accent); outline-offset:3px; }
+.lf-legacy .page-shell { max-width:1440px; grid-template-columns:220px minmax(0,1fr); gap:var(--lf-space-12); padding:0 var(--lf-space-8); }
+.lf-legacy .page-shell > main { max-width:1080px; min-width:0; }
+.lf-legacy .sidebar { top:calc(var(--lf-header) + 24px); max-height:calc(100vh - var(--lf-header) - 48px); overflow:auto; }
+.lf-legacy .sidebar nav a { font-size:14px; line-height:1.65; }
+.lf-legacy .sidebar nav a.active { background:var(--lf-tint); color:var(--lf-accent); }
+.lf-legacy .sidebar-title { font-size:20px; }
+.lf-legacy .mobile-nav { top:var(--lf-header); z-index:45; background:var(--lf-surface); border-bottom:1px solid var(--lf-line); }
+.lf-legacy .mobile-nav a { font-size:13px; }
+.lf-legacy .chapter { padding:40px 0; border-color:var(--lf-line); scroll-margin-top:130px; }
+.lf-legacy .hero { padding-top:28px; }
+.lf-legacy .hero h1, .lf-legacy .reference-header h1, .lf-legacy[data-legacy="shape"] h1, .lf-legacy[data-legacy="sliding-window"] h1 { font-size:clamp(29px,3.6vw,42px); line-height:1.35; letter-spacing:-.03em; color:var(--lf-text); }
+.lf-legacy .hero-description { font-size:18px; line-height:1.85; max-width:var(--lf-reading); }
+.lf-legacy .section-heading h2 { font-size:25px; line-height:1.5; }
+.lf-legacy .section-heading p, .lf-legacy .lead { font-size:17px; line-height:1.85; }
+.lf-legacy .section-number { color:var(--lf-accent); }
+.lf-legacy :is(.panel,.figure,.plain-card,.model-card,.reading-detail) { border-radius:var(--lf-radius); border-color:var(--lf-line); }
+.lf-legacy .button { border-radius:var(--lf-control-radius); font-size:14px; padding:10px var(--lf-space-4); }
+.lf-legacy .button.primary { background:var(--lf-accent); border-color:var(--lf-accent); color:var(--lf-surface); }
+.lf-legacy .button.primary:hover { background:var(--lf-accent-hover); }
+.lf-legacy :is(.caption,.figcap,.note,.article-footer) { color:var(--lf-muted); font-size:14px; line-height:1.8; }
+.lf-legacy :is(.mini-label,.eyebrow,.sidebar-label) { font-size:12px; letter-spacing:.08em; }
+.lf-legacy .reference-shell { max-width:900px; padding:var(--lf-space-6) var(--lf-space-8) 64px; margin:auto; }
+.lf-legacy .reference-article { font-size:17px; line-height:1.85; }
+.lf-legacy .reference-article h2 { font-size:25px; margin-top:40px; }
+.lf-legacy .reference-article h3 { font-size:20px; }
+.lf-legacy :is(.diagram-scroll,.table-scroll) { max-width:100%; overflow-x:auto; }
+.lf-legacy[data-legacy="study"] .container { max-width:var(--lf-width); }
+.lf-legacy[data-legacy="study"] header.hero { text-align:left; padding:var(--lf-space-6) 0 var(--lf-space-3); }
+.lf-legacy[data-legacy="study"] .path { display:none; }
+.lf-legacy[data-legacy="study"] .sec { background:transparent; border:0; border-top:1px solid var(--lf-line); border-radius:0; padding:var(--lf-space-8) 0; margin:0; }
+.lf-legacy[data-legacy="study"] .intro { font-size:17px; }
+.lf-legacy[data-legacy="study"] .keypoints { background:var(--lf-tint); border:0; border-left:3px solid var(--lf-accent); border-radius:0 var(--lf-radius) var(--lf-radius) 0; }
+.lf-legacy[data-legacy="study"] .keypoints li { font-size:16px; }
+.lf-legacy[data-legacy="study"] .toc { border-radius:var(--lf-radius); margin:20px 0 var(--lf-space-8); }
+.lf-legacy[data-legacy="study"] .figure { overflow:auto; }
+.lf-legacy[data-legacy="study"] .figure img { min-width:640px; }
+.lf-legacy[data-legacy="shape"] main { padding:var(--lf-space-6) var(--lf-space-8) 64px; max-width:1280px; }
+.lf-legacy[data-legacy="shape"] .lede { font-size:17px; }
+.lf-legacy[data-legacy="shape"] .card { border-radius:var(--lf-radius); border-color:var(--lf-line); }
+.lf-legacy[data-legacy="sliding-window"] .wrap { max-width:1080px; padding:var(--lf-space-6) var(--lf-space-8) 64px; }
+.lf-legacy[data-legacy="sliding-window"] header { text-align:left; margin-bottom:var(--lf-space-8); }
+.lf-legacy[data-legacy="sliding-window"] .meta { justify-content:flex-start; }
+.lf-legacy[data-legacy="sliding-window"] .wrap > section { background:transparent; border:0; border-top:1px solid var(--lf-line); padding:var(--lf-space-8) 0; border-radius:0; }
+.lf-legacy[data-legacy="sliding-window"] h2 { font-size:23px; }
+.lf-legacy[data-legacy="sliding-window"] .controls button { border-radius:var(--lf-control-radius); font-size:14px; }
+.lf-legacy[data-legacy="sliding-window"] .controls .primary { background:var(--lf-accent); border-color:var(--lf-accent); }
+.lf-legacy[data-legacy="resume"] .toolbar { gap:var(--lf-space-4); flex-wrap:wrap; }
+.lf-legacy[data-legacy="resume"] .toolbar button { border-radius:var(--lf-control-radius); }
+.lf-legacy[data-legacy="resume"] .toolbar button.primary { background:var(--lf-accent); color:white; border-color:var(--lf-accent); }
+@media screen { .lf-legacy:not([data-legacy="resume"]) { font-size:17px; line-height:1.85; } .lf-legacy[data-legacy="resume"] .paper { border-top-color:var(--lf-accent); box-shadow:none; } }
+@media(max-width:1000px) { .lf-legacy .page-shell { gap:28px; grid-template-columns:180px minmax(0,1fr); padding:0 var(--lf-space-6); } }
+@media(max-width:880px) { .lf-legacy .page-shell { display:block; padding:0 var(--lf-space-6); } .lf-legacy .sidebar { display:none; } .lf-legacy .mobile-nav { display:flex; overflow:auto; position:sticky; padding:10px 20px; gap:var(--lf-space-2); } .lf-legacy .mobile-nav a { white-space:nowrap; } }
+@media(max-width:600px) {
+  .lf-legacy .page-shell { padding:0 20px; }
+  .lf-legacy .hero-description, .lf-legacy .section-heading p, .lf-legacy .lead { font-size:16px; }
+  .lf-legacy .chapter { padding:30px 0; }
+  .lf-legacy .section-heading h2 { font-size:23px; }
+  .lf-legacy .reference-shell { padding:var(--lf-space-4) 20px var(--lf-space-12); }
+  .lf-legacy[data-legacy="study"] .container { padding:0 20px var(--lf-space-12); }
+  .lf-legacy[data-legacy="study"] .toc { padding:var(--lf-space-3); grid-template-columns:1fr; }
+  .lf-legacy[data-legacy="shape"] main, .lf-legacy[data-legacy="sliding-window"] .wrap { padding:var(--lf-space-4) 20px var(--lf-space-12); }
+  .lf-legacy .reference-article { font-size:16px; }
+  .lf-legacy .panel { padding:18px; }
+  .lf-legacy .code-walk { padding:0; }
+}
+@media print { .lf-legacy .page-shell { display:block; padding:0; } .lf-legacy .sidebar,.lf-legacy .mobile-nav { display:none; } .lf-legacy .reference-shell { padding:0; max-width:none; } }

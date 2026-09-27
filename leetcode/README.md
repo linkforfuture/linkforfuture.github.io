@@ -16,11 +16,11 @@
 
 > 🎬 带交互图解的题目：[239. 滑动窗口最大值](demos/0239-sliding-window-maximum.html ':ignore :target=_blank') —— 逐步动画演示 `deque` 的每一次进出队。
 
-> 持续更新中。左侧侧边栏按标签分类浏览，右上角可搜索题号或关键词。
+> 持续更新中。左侧侧边栏按标签分类浏览，侧栏搜索框可搜索本专题正文中的题号或关键词。
 
 ## 如何添加一道新题
 
-每刷一道新题，按下面 4 步操作：
+新增内容遵循仓库根目录的 `AGENTS.md` 和 `design/DESIGN_SYSTEM.md`，按下面步骤操作：
 
 1. **新建题解文件**：在 `solutions/` 下创建 `题号-英文题名.md`
    （示例：`0001-two-sum.md`、`0146-lru-cache.md`）
@@ -60,12 +60,11 @@
    （可迁移的套路、易错点）
    ````
 
-3. **更新侧边栏**：在 `_sidebar.md` 对应标签分组下加一行
-   `- [题号. 题目名](solutions/xxx.md)`
+3. **登记统一索引**：在根目录 `content-index.json` 增加条目，填写 `collection: "leetcode"`、对应 `group`、源文件和 `leetcode/#/solutions/xxx` 路由。执行 `python scripts/build_site.py` 自动更新侧边栏与全站目录，不手工修改 `_sidebar.md`。
 
 4. **更新题目列表**：在上方表格里加一行
 
-5. **（可选）挂交互图解**：如果这道题适合动画演示，把独立的 HTML 放进 `demos/0239-sliding-window-maximum.html` 这样的路径，然后在题解顶部链接它：
+5. **（可选）挂交互图解**：如果这道题适合动画演示，复制统一的 `templates/interactive.html`，放进 `demos/0239-sliding-window-maximum.html` 这样的路径，在内容索引登记，再在题解顶部链接它：
 
    ```markdown
    > 🎬 **配套交互图解**：[题目名图解](demos/xxxx-题目名.html ':ignore :target=_blank')
@@ -73,4 +72,4 @@
 
    `:ignore` 不能省。docsify 默认会把同源链接当成站内路由接管，点进去会把 HTML 当 markdown 渲染，页面直接乱掉；`:ignore` 让它按普通链接打开。
 
-> 小提示：用 Claude Code 的话，说一句「帮我写第 X 题」，就会按这个格式写好并同步更新侧边栏和题目列表。
+6. **检查**：执行 `python scripts/check_site.py`，并在浏览器中检查题解、图解、侧栏入口以及手机布局。

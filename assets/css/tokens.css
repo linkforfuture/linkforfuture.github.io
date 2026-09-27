@@ -1,0 +1,29 @@
+/* Site design tokens. Change shared appearance here, never in individual pages. */
+:root {
+  color-scheme: light;
+  --lf-bg: #f7f8fa;
+  --lf-surface: #ffffff;
+  --lf-text: #1f2937;
+  --lf-muted: #5c6b80;
+  --lf-line: #dfe5ed;
+  --lf-accent: #4f46e5;
+  --lf-accent-hover: #3730a3;
+  --lf-tint: #eef2ff;
+  --lf-success: #047857;
+  --lf-warning: #a16207;
+  --lf-danger: #b91c1c;
+  --lf-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --lf-mono: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+  --lf-radius: 10px;
+  --lf-control-radius: 6px;
+  --lf-width: 1160px;
+  --lf-reading: 780px;
+  --lf-header: 72px;
+  --lf-space-1: 4px;
+  --lf-space-2: 8px;
+  --lf-space-3: 12px;
+  --lf-space-4: 16px;
+  --lf-space-6: 24px;
+  --lf-space-8: 32px;
+  --lf-space-12: 48px;
+}
