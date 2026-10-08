@@ -1,0 +1,147 @@
+/* LeetCode 226 翻转二叉树交互图解。所有规则限定在 .demo-invert-tree 内。 */
+.demo-invert-tree {
+  --it-down: var(--lf-accent);
+  --it-down-soft: var(--lf-tint);
+  --it-up: var(--lf-success);
+  --it-up-soft: #e9f6f0;
+  --it-swap: #b45309;
+  --it-swap-soft: #fdf2e4;
+  --it-warn: var(--lf-warning);
+  --it-node-line: #c3ccda;
+  --it-faint: #97a3b4;
+}
+.demo-invert-tree section { margin: 0 0 var(--lf-space-12); }
+.demo-invert-tree .it-meta { display: flex; flex-wrap: wrap; gap: var(--lf-space-2); margin: 0 0 var(--lf-space-4); }
+.demo-invert-tree .it-pill { border: 1px solid var(--lf-line); background: var(--lf-surface); border-radius: 999px; padding: 2px 13px; font-size: 13px; color: var(--lf-muted); }
+.demo-invert-tree .it-flow { list-style: none; margin: 18px 0; padding: 0; display: grid; gap: 10px; }
+.demo-invert-tree .it-flow li { border: 1px solid var(--lf-line); border-left-width: 4px; border-radius: var(--lf-radius); background: var(--lf-surface); padding: 12px 16px; }
+.demo-invert-tree .it-flow b { display: block; font-size: 15px; margin-bottom: 2px; }
+.demo-invert-tree .it-flow span { font-size: 14px; color: var(--lf-muted); }
+.demo-invert-tree .it-flow .it-f-base { border-left-color: var(--it-warn); }
+.demo-invert-tree .it-flow .it-f-down { border-left-color: var(--it-down); }
+.demo-invert-tree .it-flow .it-f-up { border-left-color: var(--it-up); }
+.demo-invert-tree .it-hint { font-size: 14px; color: var(--lf-muted); margin: 0 0 var(--lf-space-4); }
+.demo-invert-tree .lf-note p:last-child { margin-bottom: 0; }
+.demo-invert-tree kbd { font: 12px var(--lf-mono); border: 1px solid var(--lf-line); border-bottom-width: 2px; border-radius: 4px; background: var(--lf-surface); padding: 1px 6px; }
+
+.demo-invert-tree .it-fig svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.demo-invert-tree .it-fig-edge { stroke: var(--it-node-line); stroke-width: 2; }
+.demo-invert-tree .it-fig-node { fill: var(--lf-surface); stroke: var(--it-node-line); stroke-width: 2; }
+.demo-invert-tree .it-fig-val { font: 600 14px var(--lf-mono); fill: var(--lf-text); text-anchor: middle; }
+.demo-invert-tree .it-fig-cap { font: 12.5px var(--lf-sans); fill: var(--lf-muted); text-anchor: middle; }
+.demo-invert-tree .it-fig-arrow { fill: none; stroke: var(--it-down); stroke-width: 2.5; }
+.demo-invert-tree .it-fig-arrow-label { font: 600 13px var(--lf-sans); fill: var(--it-down); text-anchor: middle; }
+.demo-invert-tree .it-edge-label { font: 600 12.5px var(--lf-mono); fill: var(--lf-muted); text-anchor: middle; }
+.demo-invert-tree .it-box { fill: var(--lf-bg); stroke: var(--it-faint); stroke-width: 1.6; stroke-dasharray: 6 5; }
+.demo-invert-tree .it-box-title { font: 600 15px var(--lf-sans); fill: var(--lf-text); text-anchor: middle; }
+.demo-invert-tree .it-box-sub { font: 12.5px var(--lf-sans); fill: var(--lf-muted); text-anchor: middle; }
+.demo-invert-tree .it-fig-ok { font: 600 12px var(--lf-sans); fill: var(--lf-success); text-anchor: middle; }
+.demo-invert-tree .it-arc { fill: none; stroke: var(--it-swap); stroke-width: 2.4; }
+.demo-invert-tree .it-arc-label { font: 600 12.5px var(--lf-sans); fill: var(--it-swap); text-anchor: middle; }
+.demo-invert-tree .it-mk-path { fill: var(--it-swap); }
+.demo-invert-tree .it-mk-path-down { fill: var(--it-down); }
+
+.demo-invert-tree .it-demo h2 { font-size: 25px; line-height: 1.5; letter-spacing: -.02em; margin: 0 0 var(--lf-space-4); }
+.demo-invert-tree .it-demo h3 { font-size: 19px; margin: 30px 0 10px; }
+.demo-invert-tree .it-stage { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; background: var(--lf-surface); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); padding: 18px; }
+.demo-invert-tree .it-label { display: block; font-size: 12.5px; color: var(--lf-muted); margin-bottom: 10px; }
+.demo-invert-tree .it-tree-scroll { overflow-x: auto; }
+.demo-invert-tree .it-tree-scroll svg { display: block; width: 100%; min-width: 560px; height: auto; }
+
+.demo-invert-tree .it-edge { stroke: var(--it-node-line); stroke-width: 2; }
+.demo-invert-tree .it-edge-hot { stroke: var(--it-swap); stroke-width: 3.5; }
+.demo-invert-tree .it-circle { fill: var(--lf-surface); stroke: var(--it-node-line); stroke-width: 2; }
+.demo-invert-tree .it-val { font: 600 15px var(--lf-mono); fill: var(--lf-text); text-anchor: middle; }
+.demo-invert-tree .it-node.is-path .it-circle { stroke: var(--it-down); }
+.demo-invert-tree .it-node.is-active .it-circle { fill: var(--it-down-soft); stroke: var(--it-down); stroke-width: 3.5; }
+.demo-invert-tree .it-node.is-active .it-val { fill: var(--it-down); }
+.demo-invert-tree .it-node.is-done .it-circle { fill: var(--it-up-soft); stroke: var(--it-up); }
+.demo-invert-tree .it-node.is-done .it-val { fill: var(--it-up); }
+.demo-invert-tree .it-ok circle { fill: var(--it-up); }
+.demo-invert-tree .it-ok text { font: 700 11px var(--lf-mono); fill: #fff; text-anchor: middle; }
+.demo-invert-tree .it-node.is-pulse .it-circle { animation: it-pulse .5s ease; transform-box: fill-box; transform-origin: center; }
+@keyframes it-pulse { 0% { transform: scale(1); } 45% { transform: scale(1.26); } 100% { transform: scale(1); } }
+.demo-invert-tree .it-ghost-line { stroke: var(--it-faint); stroke-width: 2; stroke-dasharray: 5 4; }
+.demo-invert-tree .it-ghost rect { fill: var(--lf-surface); stroke: var(--it-faint); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.demo-invert-tree .it-ghost text { font: 600 11px var(--lf-mono); fill: var(--it-faint); text-anchor: middle; }
+.demo-invert-tree .it-swap-arc { fill: none; stroke: var(--it-swap); stroke-width: 2.4; }
+.demo-invert-tree .it-swap-label { font: 600 12px var(--lf-sans); fill: var(--it-swap); text-anchor: middle; }
+
+.demo-invert-tree .it-stack { display: grid; gap: 8px; }
+.demo-invert-tree .it-frame { border: 1px solid var(--lf-line); border-radius: var(--lf-control-radius); background: var(--lf-bg); padding: 10px 12px; }
+.demo-invert-tree .it-frame-top { border-color: var(--it-down); background: var(--it-down-soft); }
+.demo-invert-tree .it-frame-null { border-style: dashed; border-color: var(--it-faint); background: var(--lf-surface); }
+.demo-invert-tree .it-frame-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font: 600 13px var(--lf-mono); margin-bottom: 6px; }
+.demo-invert-tree .it-topmark { font: 600 10.5px var(--lf-sans); color: #fff; background: var(--it-down); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.demo-invert-tree .it-wait { font: 400 10.5px var(--lf-sans); color: var(--lf-muted); white-space: nowrap; }
+.demo-invert-tree .it-row { display: flex; justify-content: space-between; gap: 10px; font: 12.5px/1.7 var(--lf-mono); }
+.demo-invert-tree .it-k { color: var(--lf-muted); }
+.demo-invert-tree .it-v-none { color: var(--it-faint); }
+.demo-invert-tree .it-v-call { color: var(--it-down); font-weight: 600; }
+.demo-invert-tree .it-v-null { color: var(--lf-muted); }
+.demo-invert-tree .it-v-done { color: var(--it-up); font-weight: 700; }
+.demo-invert-tree .it-frame-st { margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--lf-line); font-size: 12px; color: var(--lf-muted); }
+.demo-invert-tree .it-empty { border: 1px dashed var(--lf-line); border-radius: var(--lf-control-radius); padding: 14px; text-align: center; font-size: 13px; color: var(--lf-muted); }
+
+.demo-invert-tree .it-narr { margin-top: var(--lf-space-4); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); background: var(--lf-surface); padding: 14px 18px; }
+.demo-invert-tree .it-narr-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.demo-invert-tree .it-op { font: 700 12px var(--lf-mono); letter-spacing: .03em; color: #fff; background: var(--lf-muted); border-radius: 999px; padding: 2px 11px; white-space: nowrap; }
+.demo-invert-tree .it-op-call { background: var(--it-down); }
+.demo-invert-tree .it-op-null { background: var(--it-warn); }
+.demo-invert-tree .it-op-assign { background: var(--it-up); }
+.demo-invert-tree .it-op-swap { background: var(--it-swap); }
+.demo-invert-tree .it-op-done { background: var(--lf-text); }
+.demo-invert-tree .it-tt { font-weight: 700; font-size: 15.5px; }
+.demo-invert-tree .it-ds { margin: 0; font-size: 14.5px; line-height: 1.85; overflow-wrap: anywhere; }
+.demo-invert-tree .it-ds code, .demo-invert-tree .it-flow code, .demo-invert-tree .lf-prose code { font: .88em var(--lf-mono); background: var(--lf-bg); padding: 2px 5px; border-radius: 4px; }
+
+.demo-invert-tree .it-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lf-space-2) var(--lf-space-3); margin-top: var(--lf-space-4); }
+.demo-invert-tree .it-slider { flex: 1 1 180px; display: flex; align-items: center; }
+.demo-invert-tree .it-slider input { width: 100%; accent-color: var(--it-down); }
+.demo-invert-tree .it-counter { font: 12.5px var(--lf-mono); color: var(--lf-muted); }
+.demo-invert-tree .it-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--lf-muted); }
+.demo-invert-tree .it-sw { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--it-node-line); background: var(--lf-surface); vertical-align: -2px; margin-right: 7px; }
+.demo-invert-tree .it-sw-path { border-color: var(--it-down); }
+.demo-invert-tree .it-sw-active { border-color: var(--it-down); background: var(--it-down-soft); }
+.demo-invert-tree .it-sw-done { border-color: var(--it-up); background: var(--it-up-soft); }
+.demo-invert-tree .it-sw-swap { border-color: var(--it-swap); background: var(--it-swap-soft); }
+
+.demo-invert-tree .it-code { margin: 0; padding: 14px 0; background: var(--lf-bg); border: 1px solid var(--lf-line); border-radius: var(--lf-radius); font: 13px/2 var(--lf-mono); overflow-x: auto; }
+.demo-invert-tree .it-code .ln { display: block; padding-right: 16px; white-space: pre; }
+.demo-invert-tree .it-code .num { display: inline-block; width: 34px; margin-right: 12px; text-align: right; color: var(--it-faint); user-select: none; }
+.demo-invert-tree .it-code .ln.hl { background: var(--it-down-soft); box-shadow: inset 3px 0 0 var(--it-down); }
+.demo-invert-tree .it-code .c { color: var(--lf-muted); }
+
+.demo-invert-tree .it-faq details { border: 1px solid var(--lf-line); border-radius: var(--lf-radius); background: var(--lf-surface); padding: 0 18px; margin-bottom: 10px; }
+.demo-invert-tree .it-faq summary { font-weight: 600; font-size: 16px; padding: 14px 0; }
+.demo-invert-tree .it-faq details[open] summary { border-bottom: 1px dashed var(--lf-line); }
+.demo-invert-tree .it-dbody { padding: 14px 0 4px; font-size: 15px; }
+.demo-invert-tree .it-dbody p { margin: 0 0 14px; }
+.demo-invert-tree .it-dbody p:last-child { margin-bottom: 4px; }
+.demo-invert-tree pre.it-mini { margin: 0 0 14px; padding: 12px 16px; background: var(--lf-bg); border: 1px solid var(--lf-line); border-radius: var(--lf-control-radius); font: 12.5px/1.85 var(--lf-mono); overflow-x: auto; }
+.demo-invert-tree .it-cmp { border: 1px solid var(--lf-line); border-radius: var(--lf-control-radius); overflow: hidden; margin: 0 0 14px; }
+.demo-invert-tree .it-cmp-hd { background: var(--lf-bg); padding: 8px 14px; font-size: 13px; color: var(--lf-muted); border-bottom: 1px solid var(--lf-line); }
+.demo-invert-tree .it-cmp-row { display: flex; gap: 10px; padding: 9px 14px; font-size: 14px; border-bottom: 1px solid var(--lf-line); }
+.demo-invert-tree .it-cmp-row:last-child { border-bottom: 0; }
+.demo-invert-tree .it-cmp-row .it-mark { flex: 0 0 74px; font: 600 11.5px var(--lf-mono); padding-top: 2px; }
+.demo-invert-tree .it-cmp-good .it-mark { color: var(--it-up); }
+.demo-invert-tree .it-cmp-bad .it-mark { color: var(--lf-danger); }
+
+.demo-invert-tree .it-motto { border: 1px solid var(--lf-line); border-left: 4px solid var(--it-down); border-radius: var(--lf-radius); background: var(--lf-surface); padding: 16px 20px; margin: 0 0 18px; }
+.demo-invert-tree .it-motto p { margin: 0; font-size: 16.5px; line-height: 2; }
+.demo-invert-tree .it-rel { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.demo-invert-tree .it-rel li { font-size: 14.5px; padding-left: 18px; position: relative; }
+.demo-invert-tree .it-rel li::before { content: "→"; position: absolute; left: 0; color: var(--it-down); }
+.demo-invert-tree .it-noscript { font-size: 14px; color: var(--lf-muted); }
+
+@media (max-width: 900px) {
+  .demo-invert-tree .it-stage { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .demo-invert-tree .it-stage { padding: 14px; }
+  .demo-invert-tree .it-frame-hd { flex-direction: column; gap: 2px; }
+  .demo-invert-tree .it-cmp-row { flex-direction: column; gap: 2px; }
+}
+@media print {
+  .demo-invert-tree .it-controls, .demo-invert-tree .it-slider { display: none; }
+}

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="LeetCode 226 翻转二叉树的递归执行图解：沿调用栈单步走一遍，看清递归下降、触底返回、接住成品与自底向上的指针交换。"><title>翻转二叉树：递归图解 · Linkforfuture</title>
+<!-- LF:HEAD -->
+<link rel="stylesheet" href="../../assets/css/tokens.css">
+<link rel="stylesheet" href="../../assets/css/site.css">
+
+<script src="../../assets/js/site.js" defer></script>
+<!-- /LF:HEAD -->
+<link rel="stylesheet" href="../../assets/css/invert-tree.css">
+</head><body class="lf-site" data-page="invert-tree">
+<!-- LF:HEADER -->
+<a class="lf-skip" href="#lf-content">跳到正文</a>
+<header class="lf-header"><div class="lf-header-inner">
+  <a class="lf-brand" href="../../index.html"><span class="lf-brand-mark" aria-hidden="true">L</span>Linkforfuture</a>
+  <div class="lf-nav" role="navigation" aria-label="全站导航"><a href="../../index.html">首页</a><a href="../../work/">工作</a><a href="../../topics.html" aria-current="page">学习</a><a href="../../about.html">关于我</a></div>
+  <details class="lf-menu"><summary>导航</summary><div class="lf-nav" role="navigation" aria-label="移动端全站导航"><a href="../../index.html">首页</a><a href="../../work/">工作</a><a href="../../topics.html" aria-current="page">学习</a><a href="../../about.html">关于我</a></div></details>
+</div></header>
+<div class="lf-container"><div class="lf-breadcrumb"><a href="../../topics.html">学习</a> / <a href="../../topics.html#algorithms">算法与数据结构</a> / 翻转二叉树：递归图解</div></div>
+<!-- /LF:HEADER -->
+<main class="lf-container demo-invert-tree" id="lf-content">
+
+<header class="lf-page-heading">
+  <span class="lf-tag">交互图解</span>
+  <h1 class="lf-title">翻转二叉树：递归图解</h1>
+  <p class="lf-lead">LeetCode 226 · 递归想不通，通常不是代码难，而是脑海里缺一个画面。这一页把调用栈摊开：函数怎么下去、在哪儿触底、怎么带着「翻好的子树」回来、交换为什么发生在回程。</p>
+  <div class="it-meta">
+    <span class="it-pill">难度：简单</span>
+    <span class="it-pill">树 · 递归 · DFS</span>
+    <span class="it-pill">时间 O(n)</span>
+    <span class="it-pill">空间 O(h)</span>
+  </div>
+</header>
+
+<section class="lf-prose" aria-labelledby="it-sec-problem">
+<h2 id="it-sec-problem">题目</h2>
+<p>给你一棵二叉树的根节点 <code>root</code>，翻转这棵二叉树，并返回其根节点。翻转的含义是：树里<b>每一个节点</b>的左右孩子都互换位置。</p>
+<div class="lf-scroll it-fig">
+<svg viewBox="0 0 710 225" role="img" aria-label="左图是输入二叉树 4-2-7-1-3-6-9，右图是翻转后的输出 4-7-2-9-6-3-1">
+<defs>
+<marker id="it-mk-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="it-mk-path-down" d="M0,0 L10,5 L0,10 z"></path></marker>
+</defs>
+<line class="it-fig-edge" x1="175" y1="55" x2="111" y2="93"></line>
+<line class="it-fig-edge" x1="175" y1="55" x2="239" y2="93"></line>
+<line class="it-fig-edge" x1="111" y1="127" x2="79" y2="165"></line>
+<line class="it-fig-edge" x1="111" y1="127" x2="143" y2="165"></line>
+<line class="it-fig-edge" x1="239" y1="127" x2="207" y2="165"></line>
+<line class="it-fig-edge" x1="239" y1="127" x2="271" y2="165"></line>
+<circle class="it-fig-node" cx="175" cy="38" r="17"></circle><text class="it-fig-val" x="175" y="43">4</text>
+<circle class="it-fig-node" cx="111" cy="110" r="17"></circle><text class="it-fig-val" x="111" y="115">2</text>
+<circle class="it-fig-node" cx="239" cy="110" r="17"></circle><text class="it-fig-val" x="239" y="115">7</text>
+<circle class="it-fig-node" cx="79" cy="182" r="17"></circle><text class="it-fig-val" x="79" y="187">1</text>
+<circle class="it-fig-node" cx="143" cy="182" r="17"></circle><text class="it-fig-val" x="143" y="187">3</text>
+<circle class="it-fig-node" cx="207" cy="182" r="17"></circle><text class="it-fig-val" x="207" y="187">6</text>
+<circle class="it-fig-node" cx="271" cy="182" r="17"></circle><text class="it-fig-val" x="271" y="187">9</text>
+<text class="it-fig-cap" x="175" y="215">输入 [4,2,7,1,3,6,9]</text>
+<line class="it-fig-arrow" x1="312" y1="110" x2="398" y2="110" marker-end="url(#it-mk-down)"></line>
+<text class="it-fig-arrow-label" x="352" y="98">翻转</text>
+<line class="it-fig-edge" x1="535" y1="55" x2="471" y2="93"></line>
+<line class="it-fig-edge" x1="535" y1="55" x2="599" y2="93"></line>
+<line class="it-fig-edge" x1="471" y1="127" x2="439" y2="165"></line>
+<line class="it-fig-edge" x1="471" y1="127" x2="503" y2="165"></line>
+<line class="it-fig-edge" x1="599" y1="127" x2="567" y2="165"></line>
+<line class="it-fig-edge" x1="599" y1="127" x2="631" y2="165"></line>
+<circle class="it-fig-node" cx="535" cy="38" r="17"></circle><text class="it-fig-val" x="535" y="43">4</text>
+<circle class="it-fig-node" cx="471" cy="110" r="17"></circle><text class="it-fig-val" x="471" y="115">7</text>
+<circle class="it-fig-node" cx="599" cy="110" r="17"></circle><text class="it-fig-val" x="599" y="115">2</text>
+<circle class="it-fig-node" cx="439" cy="182" r="17"></circle><text class="it-fig-val" x="439" y="187">9</text>
+<circle class="it-fig-node" cx="503" cy="182" r="17"></circle><text class="it-fig-val" x="503" y="187">6</text>
+<circle class="it-fig-node" cx="567" cy="182" r="17"></circle><text class="it-fig-val" x="567" y="187">3</text>
+<circle class="it-fig-node" cx="631" cy="182" r="17"></circle><text class="it-fig-val" x="631" y="187">1</text>
+<text class="it-fig-cap" x="535" y="215">输出 [4,7,2,9,6,3,1]</text>
+</svg>
+</div>
+<p><strong>提示</strong>：树中节点数目范围 <code>[0, 100]</code>；<code>-100 &lt;= Node.val &lt;= 100</code>。原题：<a href="https://leetcode.cn/problems/invert-binary-tree/" rel="noopener">LeetCode 226. 翻转二叉树 ↗</a></p>
+</section>
+
+<section class="lf-prose" aria-labelledby="it-sec-model">
+<h2 id="it-sec-model">先搭心智模型：把递归当成一份契约</h2>
+<p>递归读不通，几乎总是因为想做一件人脑做不到的事：<b>同时跟踪所有层</b>。三层递归就有三个「进度」悬在半空，越想越乱。正确的做法是每次只看一层，其余全部交给一份契约。</p>
+<div class="lf-note">
+<p><b>invertTree 的契约</b>：给我任何一棵子树的根（哪怕是空指针），我还你<b>同一棵树</b>，但里面每个节点的左右孩子都已经互换。</p>
+<p>读代码时，把每一次 <code>invertTree(...)</code> 调用都当成一个<b>必定兑现契约的黑盒</b>。不要去想它内部怎么实现——那正是它自己的事。</p>
+</div>
+<p>有了契约，整段代码只剩下三个问题要回答：</p>
+<ol>
+<li><b>什么时候不用干活？</b> 空树没有孩子可换，原样返回 <code>nullptr</code>（第 4–5 行）。</li>
+<li><b>怎么把问题变小？</b> 把左子树、右子树分别整棵交出去（第 7–8 行）。</li>
+<li><b>拿到结果后，我这一层做什么？</b> 把两棵「已经翻好」的子树对调挂回自己身上，然后交还（第 9–11 行）。</li>
+</ol>
+<p>三问答完，代码就读完了。下面这张图是第 3 问的画面：站在任何一个节点上，你看到的永远是两个黑盒加一次对调。</p>
+<div class="lf-scroll it-fig">
+<svg viewBox="0 0 710 232" role="img" aria-label="契约图：一个节点 4 通过 left 和 right 两个指针，分别指向两个黑盒子树，两个盒子之间用双向箭头标注互换位置">
+<defs>
+<marker id="it-mk-swap-static" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="it-mk-path" d="M0,0 L10,5 L0,10 z"></path></marker>
+</defs>
+<line class="it-fig-edge" x1="341" y1="60" x2="212" y2="104"></line>
+<line class="it-fig-edge" x1="369" y1="60" x2="498" y2="104"></line>
+<text class="it-edge-label" x="256" y="76">left =</text>
+<text class="it-edge-label" x="454" y="76">right =</text>
+<circle class="it-fig-node" cx="355" cy="42" r="22"></circle><text class="it-fig-val" x="355" y="47">4</text>
+<rect class="it-box" x="90" y="104" width="220" height="100" rx="10"></rect>
+<text class="it-box-title" x="200" y="136">左子树</text>
+<text class="it-box-sub" x="200" y="160">内部长什么样，不用管</text>
+<text class="it-fig-ok" x="200" y="184">已经翻转好 ✓</text>
+<rect class="it-box" x="400" y="104" width="220" height="100" rx="10"></rect>
+<text class="it-box-title" x="510" y="136">右子树</text>
+<text class="it-box-sub" x="510" y="160">内部长什么样，不用管</text>
+<text class="it-fig-ok" x="510" y="184">已经翻转好 ✓</text>
+<line class="it-arc" x1="314" y1="154" x2="396" y2="154" marker-start="url(#it-mk-swap-static)" marker-end="url(#it-mk-swap-static)"></line>
+<text class="it-arc-label" x="355" y="142">互换位置</text>
+<text class="it-fig-cap" x="355" y="226">这一层唯一要做的事</text>
+</svg>
+</div>
+<h3 id="it-h3-direction">代码的两个方向</h3>
+<p>这份代码同时在两个方向上跑，把它拆成三段就不绕了：</p>
+<ol class="it-flow">
+<li class="it-f-base"><b>第 4–5 行 · 刹车</b><span>空树直接返回。递归能停下来的唯一原因，也是所有树递归的第一行肌肉记忆。</span></li>
+<li class="it-f-down"><b>第 7–8 行 · 下去（只拆不改）</b><span>把「翻转我的左子树」「翻转我的右子树」两个子任务派出去，然后<b>停在原地等结果</b>。下降路上没有任何节点被修改。</span></li>
+<li class="it-f-up"><b>第 9–11 行 · 上来（组装交换）</b><span>两棵成品到手，互换挂回，再把自己交还上一层。<b>翻转这个动作 100% 发生在回程</b>，所以是自底向上完成的。</span></li>
+</ol>
+<div class="lf-note">
+<p><b>最常见的思维陷阱</b>：盯着 <code>invertTree(root-&gt;left)</code> 想「它里面又要调用自己，那里面又要调用自己……」。这条链永远想不完。你只需要知道两件事：它<b>一定会停</b>（有刹车），停住之后<b>一定兑现契约</b>（还你一棵翻好的子树）。剩下的交给调用栈，不是交给你的脑子。</p>
+</div>
+</section>
+
+<section class="it-demo" aria-labelledby="it-sec-demo">
+<h2 id="it-sec-demo">逐步演示</h2>
+<p class="it-hint">用官方样例 <code>[4,2,7,1,3,6,9]</code> 走完整趟递归，共 30 步。点「下一步」，或用 <kbd>←</kbd> <kbd>→</kbd> 方向键单步；也可以自动播放。左上是树的真实状态，右上是调用栈，下面高亮的代码行就是此刻正在执行的那一行。</p>
+<div class="it-stage">
+  <div>
+    <span class="it-label">二叉树当前状态（✓ = 该节点已翻转完毕并返回）</span>
+    <div class="it-tree-scroll lf-scroll" role="region" aria-label="二叉树当前状态图，可横向滚动" tabindex="0">
+      <svg id="it-tree" viewBox="0 0 660 344" role="img" aria-label="二叉树当前状态"></svg>
+    </div>
+  </div>
+  <div>
+    <span class="it-label">调用栈（最上面一帧正在执行，下面的都在挂起等待）</span>
+    <div class="it-stack" id="it-stack"></div>
+  </div>
+</div>
+<div class="it-narr">
+  <p class="it-narr-hd"><span class="it-op" id="it-op">准备</span><span class="it-tt" id="it-tt"></span></p>
+  <p class="it-ds" id="it-ds" aria-live="polite"></p>
+</div>
+<div class="it-controls">
+  <button type="button" class="lf-button" id="it-btn-reset">重置</button>
+  <button type="button" class="lf-button" id="it-btn-prev">上一步</button>
+  <button type="button" class="lf-button lf-button-primary" id="it-btn-next">下一步</button>
+  <button type="button" class="lf-button" id="it-btn-play">自动播放</button>
+  <span class="it-slider"><input type="range" id="it-slider" min="0" max="30" value="0" aria-label="演示进度"></span>
+  <span class="it-counter" id="it-counter">第 0 / 30 步</span>
+</div>
+<ul class="it-legend">
+  <li><span class="it-sw it-sw-active"></span>当前正在执行的节点</li>
+  <li><span class="it-sw it-sw-path"></span>在调用栈上的路径</li>
+  <li><span class="it-sw it-sw-done"></span>已翻转并返回（带 ✓）</li>
+  <li><span class="it-sw it-sw-swap"></span>本步刚被互换的孩子</li>
+  <li><span class="it-sw"></span>还没轮到</li>
+</ul>
+<noscript><p class="it-noscript">逐步演示需要 JavaScript。没有脚本时，可以阅读上下的文字说明、逐行拆解与常见疑问，要点是完整的。</p></noscript>
+<h3 id="it-h3-code">对照代码</h3>
+<p class="it-hint">高亮的那几行，就是当前这一步正在执行的代码。</p>
+<div class="lf-scroll"><pre class="it-code" id="it-code">class Solution {
+public:
+    TreeNode* invertTree(TreeNode* root) {
+        if (root == nullptr) {
+            return nullptr;
+        }
+        TreeNode* left = invertTree(root-&gt;left);
+        TreeNode* right = invertTree(root-&gt;right);
+        root-&gt;left = right;
+        root-&gt;right = left;
+        return root;
+    }
+};</pre></div>
+</section>
+
+<section class="lf-prose" aria-labelledby="it-sec-lines">
+<h2 id="it-sec-lines">逐行拆解</h2>
+<div class="lf-scroll">
+<table>
+<thead><tr><th>行</th><th>代码</th><th>它在做什么</th></tr></thead>
+<tbody>
+<tr><td>4–5</td><td><code>if (root == nullptr) return nullptr;</code></td><td>刹车。空树没有孩子可换，原样返回。没有它，调用会顺着不存在的孩子无限冲下去</td></tr>
+<tr><td>7</td><td><code>TreeNode* left = invertTree(root-&gt;left);</code></td><td>把左子树整棵托付给下一层，然后<b>停在这一行等结果</b>。等到的 <code>left</code> 是「已经翻好的左子树」</td></tr>
+<tr><td>8</td><td><code>TreeNode* right = invertTree(root-&gt;right);</code></td><td>同理托付右子树。注意此时还没有任何指针被改动</td></tr>
+<tr><td>9–10</td><td><code>root-&gt;left = right; root-&gt;right = left;</code></td><td>全题唯一的实际动作：两根孩子指针互换。O(1)，不复制任何节点</td></tr>
+<tr><td>11</td><td><code>return root;</code></td><td>把「已经翻好的自己」交还上一层，兑现契约</td></tr>
+</tbody>
+</table>
+</div>
+<p>第 7、8 行的 <code>left</code> / <code>right</code> 是两个<b>局部变量</b>，作用相当于两只手：先把两棵成品子树都拿稳，再动 <code>root</code> 的指针。这一点是下面第一个疑问的答案。</p>
+</section>
+
+<section class="lf-prose it-faq" aria-labelledby="it-sec-faq">
+<h2 id="it-sec-faq">几个卡住人的点</h2>
+
+<details open>
+<summary>为什么必须先用 left / right 存起来，不能直接写进赋值？</summary>
+<div class="it-dbody">
+<p>因为第 9 行一旦执行，<code>root-&gt;left</code> 里原来那个指针就被覆盖掉了。如果不先存进局部变量，原左子树从此<b>再也找不回来</b>。</p>
+<pre class="it-mini">// 看起来更短的错误写法
+root-&gt;left  = invertTree(root-&gt;right);   // ① 左指针被覆盖，原左子树丢失
+root-&gt;right = invertTree(root-&gt;left);    // ② 这里的 root-&gt;left 已经是「翻好的右子树」了</pre>
+<div class="it-cmp">
+<div class="it-cmp-hd">设原来左孩子是 1、右孩子是 3，看看两种写法的结局：</div>
+<div class="it-cmp-row it-cmp-bad"><span class="it-mark">错误写法</span><span>② 又把右子树翻了一遍（翻了两次等于没翻），而节点 1 那棵子树<b>整棵丢失</b>，永远没人翻它</span></div>
+<div class="it-cmp-row it-cmp-good"><span class="it-mark">你的写法</span><span>两个结果先落在 <code>left</code> / <code>right</code> 上，<code>root</code> 的指针随后怎么改都不影响它们，两棵子树各翻一次、恰好一次</span></div>
+</div>
+<p>等价的写法是 <code>std::swap(root-&gt;left, root-&gt;right)</code>——它内部同样借助临时变量，只是替你写好了。</p>
+</div>
+</details>
+
+<details open>
+<summary>交换为什么放在递归之后？放到递归之前行不行？</summary>
+<div class="it-dbody">
+<p>行，而且同样正确。你这份代码把交换放在<b>后序位置</b>（两个孩子都处理完之后）；也可以放在<b>前序位置</b>（先换再递归）：</p>
+<pre class="it-mini">if (root == nullptr) return nullptr;
+std::swap(root-&gt;left, root-&gt;right);   // 先把两个孩子换个位置
+invertTree(root-&gt;left);               // 再分别翻转（此时左右已经易位）
+invertTree(root-&gt;right);
+return root;</pre>
+<p>两种写法都保证「每个节点的孩子恰好被交换一次」，结果完全一样。区别只是交换发生的时机：后序版是<b>自底向上</b>翻好（叶子先完成，根最后），前序版是<b>自顶向下</b>翻好。</p>
+<p>「当前节点的动作放在去程还是回程」是树递归里最值得练的直觉。这题两种都行，但很多题只有一种对——比如求树高，必须先拿到孩子的高度才能算自己的，只能在回程做。</p>
+</div>
+</details>
+
+<details>
+<summary>叶子节点为什么要白走一遍交换？</summary>
+<div class="it-dbody">
+<p>因为这份代码只认识「空」和「非空」，<b>不认识「叶子」</b>。叶子的交换是 <code>swap(nullptr, nullptr)</code>，什么也没发生，但流程一步没少。</p>
+<p>这正是递归省力的地方：不写任何特判，几行代码就覆盖了任意形状的树。演示里第 6、11、19、24 步就是四次「交换两个空指针」，可以专门停下来看一眼。</p>
+</div>
+</details>
+
+<details>
+<summary>递归靠什么保证一定会停？</summary>
+<div class="it-dbody">
+<p>靠两件事同时成立：</p>
+<ol>
+<li>每个非空调用只会对<b>严格更小的子树</b>发起新调用，也就是每一步都在朝「空」靠近；</li>
+<li>遇到空指针立刻返回，不再产生任何新调用。</li>
+</ol>
+<p>树是有限的，所以调用链必然撞上第 4 行的刹车。写树递归时先写 base case，就是在先把这条保证钉死。</p>
+</div>
+</details>
+
+<details>
+<summary>空间复杂度为什么是 O(h) 而不是 O(n)？</summary>
+<div class="it-dbody">
+<p>同一时刻栈里存放的，是「从根到当前节点」的<b>一条路径</b>，最长等于树高 <code>h</code>。<code>n</code> 是访问总量，<code>h</code> 才是同时在场的人数——递归的栈空间看后者。</p>
+<p>平衡树 <code>h = log n</code>；退化成链表时 <code>h = n</code>，这是最坏情况。演示里这棵树最深时栈中有 4 帧（含触底那一帧）。</p>
+</div>
+</details>
+
+<details>
+<summary>不用递归能写吗？</summary>
+<div class="it-dbody">
+<p>能。用队列做 BFS（或用显式栈做 DFS），每个节点出队时交换它的两个孩子，再把非空孩子入队：</p>
+<pre class="it-mini">if (root == nullptr) return nullptr;
+std::queue&lt;TreeNode*&gt; q;
+q.push(root);
+while (!q.empty()) {
+    TreeNode* x = q.front(); q.pop();
+    std::swap(x-&gt;left, x-&gt;right);          // 做的事和递归版完全一样
+    if (x-&gt;left)  q.push(x-&gt;left);
+    if (x-&gt;right) q.push(x-&gt;right);
+}
+return root;</pre>
+<p>逻辑完全同构：访问每个节点一次，交换它的两个孩子。递归只是把「遍历所有节点」这件事交给调用栈免费代劳了。</p>
+</div>
+</details>
+
+<details>
+<summary>这道「简单」题到底在考什么？</summary>
+<div class="it-dbody">
+<p>两样东西：<b>递归信任</b>（把子问题当黑盒，只处理当前一层）和<b>后序思维</b>（真正的组装发生在回程）。它们是所有树递归题的通用地基。</p>
+<p>后面的题几乎都是同一个骨架——向左右子树各要一个结果，再组合成自己的答案：求高度要 <code>max(左, 右) + 1</code>，判对称要比较「左的左 vs 右的右」，合并树要把两棵树的对应节点接起来。把这题的调用栈画面建立起来，后面会省很多力气。</p>
+</div>
+</details>
+</section>
+
+<section class="lf-prose" aria-labelledby="it-sec-summary">
+<h2 id="it-sec-summary">小结：把这套思路带走</h2>
+<h3 id="it-h3-three">写任何树递归，先回答三个问题</h3>
+<ol>
+<li><b>边界是什么？</b>什么时候可以不做任何事直接返回。这题是 <code>root == nullptr</code>。</li>
+<li><b>子问题的契约是什么？</b>用一句话说清「给递归什么、它还你什么」。这题是「给一棵子树，还你它的镜像」。说清之后<b>就不要再怀疑它</b>。</li>
+<li><b>当前这一层做什么？</b>假设契约成立，我这层需要几步操作。这题是两次指针赋值。</li>
+</ol>
+<p>想不通的时候，不要盯着代码硬想，<b>拿一棵三五个节点的小树手工跑一遍</b>——把每次调用、每个返回值写下来。这一页的演示做的就是这件事，只是替你写完了。</p>
+<div class="it-motto">
+<p>空树直接回，<br>左右各派一次活；<br>两手都拿稳，<br>指针一换就交货。</p>
+</div>
+<p class="it-hint">四句分别对应：第 4–5 行的刹车、第 7–8 行的两次递归、两个局部变量的意义、第 9–11 行的交换与返回。</p>
+<h3 id="it-h3-next">同一套思路可以继续刷</h3>
+<ul class="it-rel">
+<li><b>104 二叉树的最大深度</b>：向左右子树要高度，回程算 <code>max + 1</code>。后序位置不可省</li>
+<li><b>101 对称二叉树</b>：把「翻转」换成「比较」，递归函数同时吃两个节点</li>
+<li><b>617 合并二叉树</b>：两棵树同步下降，回程把结果接起来</li>
+<li><b>100 相同的树</b>：与 101 同构，只是比较条件不同</li>
+<li><b>110 平衡二叉树</b>：在求高度的回程里顺带判断，体会「为什么只能在回程做」</li>
+</ul>
+</section>
+
+</main>
+<!-- LF:FOOTER -->
+<footer class="lf-footer"><div class="lf-footer-inner"><span>Linkforfuture · 记录工作、学习与思考 · 持续生长</span><div class="lf-footer-links"><a href="https://github.com/linkforfuture">GitHub ↗</a><a href="../../about.html">关于这个小站</a></div></div></footer>
+<!-- /LF:FOOTER -->
+<script src="../../assets/js/pages/invert-tree.js" defer></script>
+</body></html>

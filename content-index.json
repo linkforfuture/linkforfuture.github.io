@@ -773,6 +773,20 @@
       "section": "learning"
     },
     {
+      "id": "leetcode-solutions-0226-invert-binary-tree",
+      "title": "226. 翻转二叉树",
+      "summary": "算法与数据结构 · 树与递归",
+      "topic": "algorithms",
+      "kind": "学习笔记",
+      "source": "leetcode/solutions/0226-invert-binary-tree.md",
+      "url": "leetcode/#/solutions/0226-invert-binary-tree",
+      "collection": "leetcode",
+      "group": "树与递归",
+      "updated": "2026-10-08",
+      "featured": false,
+      "section": "learning"
+    },
+    {
       "id": "leetcode-solutions-0239-sliding-window-maximum",
       "title": "239. 滑动窗口最大值",
       "summary": "算法与数据结构 · 单调队列",
@@ -867,6 +881,18 @@
       "source": "leetcode/demos/0239-sliding-window-maximum.html",
       "url": "leetcode/demos/0239-sliding-window-maximum.html",
       "updated": null,
+      "featured": false,
+      "section": "learning"
+    },
+    {
+      "id": "invert-tree",
+      "title": "翻转二叉树：递归图解",
+      "summary": "沿调用栈单步走一遍 invertTree，看清递归下降、触底返回、接住成品与自底向上的指针交换。",
+      "topic": "algorithms",
+      "kind": "交互图解",
+      "source": "leetcode/demos/0226-invert-binary-tree.html",
+      "url": "leetcode/demos/0226-invert-binary-tree.html",
+      "updated": "2026-10-08",
       "featured": false,
       "section": "learning"
     },

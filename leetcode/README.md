@@ -12,9 +12,10 @@
 | 题号 | 题目 | 难度 | 标签 |
 | ---- | ---- | ---- | ---- |
 | 3 | [无重复字符的最长子串](solutions/0003-longest-substring-without-repeating-characters.md) | 中等 | 滑动窗口 · 哈希表 |
+| 226 | [翻转二叉树](solutions/0226-invert-binary-tree.md) | 简单 | 树 · 递归 |
 | 239 | [滑动窗口最大值](solutions/0239-sliding-window-maximum.md) | 困难 | 单调队列 · 滑动窗口 |
 
-> 🎬 带交互图解的题目：[239. 滑动窗口最大值](demos/0239-sliding-window-maximum.html ':ignore :target=_blank') —— 逐步动画演示 `deque` 的每一次进出队。
+> 🎬 带交互图解的题目：[226. 翻转二叉树](demos/0226-invert-binary-tree.html ':ignore :target=_blank') —— 把调用栈摊开，单步看递归怎么下降、触底、带着翻好的子树回来；[239. 滑动窗口最大值](demos/0239-sliding-window-maximum.html ':ignore :target=_blank') —— 逐步动画演示 `deque` 的每一次进出队。
 
 > 持续更新中。左侧侧边栏按标签分类浏览，侧栏搜索框可搜索本专题正文中的题号或关键词。
 
