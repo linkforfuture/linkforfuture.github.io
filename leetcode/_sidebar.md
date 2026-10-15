@@ -7,6 +7,9 @@
 - 滑动窗口
   - [3. 无重复字符的最长子串](solutions/0003-longest-substring-without-repeating-characters.md)
 
+- 回溯
+  - [17. 电话号码的字母组合](solutions/0017-letter-combinations-of-a-phone-number.md)
+
 - 矩阵
   - [73. 矩阵置零](solutions/0073-set-matrix-zeroes.md)
 

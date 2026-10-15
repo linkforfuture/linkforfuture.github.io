@@ -773,6 +773,20 @@
       "section": "learning"
     },
     {
+      "id": "leetcode-solutions-0017-letter-combinations-of-a-phone-number",
+      "title": "17. 电话号码的字母组合",
+      "summary": "算法与数据结构 · 回溯",
+      "topic": "algorithms",
+      "kind": "学习笔记",
+      "source": "leetcode/solutions/0017-letter-combinations-of-a-phone-number.md",
+      "url": "leetcode/#/solutions/0017-letter-combinations-of-a-phone-number",
+      "collection": "leetcode",
+      "group": "回溯",
+      "updated": "2026-10-15",
+      "featured": false,
+      "section": "learning"
+    },
+    {
       "id": "leetcode-solutions-0073-set-matrix-zeroes",
       "title": "73. 矩阵置零",
       "summary": "算法与数据结构 · 原地标记",
