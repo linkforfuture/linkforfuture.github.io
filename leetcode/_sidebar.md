@@ -7,6 +7,9 @@
 - 滑动窗口
   - [3. 无重复字符的最长子串](solutions/0003-longest-substring-without-repeating-characters.md)
 
+- 矩阵
+  - [73. 矩阵置零](solutions/0073-set-matrix-zeroes.md)
+
 - 树与递归
   - [226. 翻转二叉树](solutions/0226-invert-binary-tree.md)
 

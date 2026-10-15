@@ -773,6 +773,20 @@
       "section": "learning"
     },
     {
+      "id": "leetcode-solutions-0073-set-matrix-zeroes",
+      "title": "73. 矩阵置零",
+      "summary": "算法与数据结构 · 原地标记",
+      "topic": "algorithms",
+      "kind": "学习笔记",
+      "source": "leetcode/solutions/0073-set-matrix-zeroes.md",
+      "url": "leetcode/#/solutions/0073-set-matrix-zeroes",
+      "collection": "leetcode",
+      "group": "矩阵",
+      "updated": "2026-10-15",
+      "featured": false,
+      "section": "learning"
+    },
+    {
       "id": "leetcode-solutions-0226-invert-binary-tree",
       "title": "226. 翻转二叉树",
       "summary": "算法与数据结构 · 树与递归",
