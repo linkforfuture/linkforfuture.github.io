@@ -787,6 +787,20 @@
       "section": "learning"
     },
     {
+      "id": "leetcode-solutions-0200-number-of-islands",
+      "title": "200. 岛屿数量",
+      "summary": "算法与数据结构 · 网格泛洪",
+      "topic": "algorithms",
+      "kind": "学习笔记",
+      "source": "leetcode/solutions/0200-number-of-islands.md",
+      "url": "leetcode/#/solutions/0200-number-of-islands",
+      "collection": "leetcode",
+      "group": "图与搜索",
+      "updated": "2026-10-15",
+      "featured": false,
+      "section": "learning"
+    },
+    {
       "id": "leetcode-solutions-0226-invert-binary-tree",
       "title": "226. 翻转二叉树",
       "summary": "算法与数据结构 · 树与递归",

@@ -10,6 +10,9 @@
 - 矩阵
   - [73. 矩阵置零](solutions/0073-set-matrix-zeroes.md)
 
+- 图与搜索
+  - [200. 岛屿数量](solutions/0200-number-of-islands.md)
+
 - 树与递归
   - [226. 翻转二叉树](solutions/0226-invert-binary-tree.md)
 

@@ -13,6 +13,7 @@
 | ---- | ---- | ---- | ---- |
 | 3 | [无重复字符的最长子串](solutions/0003-longest-substring-without-repeating-characters.md) | 中等 | 滑动窗口 · 哈希表 |
 | 73 | [矩阵置零](solutions/0073-set-matrix-zeroes.md) | 中等 | 数组 · 矩阵 · 原地算法 |
+| 200 | [岛屿数量](solutions/0200-number-of-islands.md) | 中等 | 广度优先搜索 · 深度优先搜索 · 网格泛洪 |
 | 226 | [翻转二叉树](solutions/0226-invert-binary-tree.md) | 简单 | 树 · 递归 |
 | 239 | [滑动窗口最大值](solutions/0239-sliding-window-maximum.md) | 困难 | 单调队列 · 滑动窗口 |
 
