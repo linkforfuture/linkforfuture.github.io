@@ -437,6 +437,20 @@
       "section": "work"
     },
     {
+      "id": "work-analysis-hccl-shared-comm-notify-nccl-ordering",
+      "title": "HCCL 跨流 Notify 超时与 NCCL 保序",
+      "summary": "记录 A5 同一通信域下 AllGather 与 BatchSendRecv 的 Notify 同步失配、事件规避验证，以及 NCCL 跨流完成依赖的源码对照。",
+      "topic": "communication",
+      "kind": "分析报告",
+      "source": "work/analysis/hccl-shared-comm-notify-nccl-ordering.md",
+      "url": "work/#/analysis/hccl-shared-comm-notify-nccl-ordering",
+      "collection": "work",
+      "group": "分析报告",
+      "updated": "2026-10-16",
+      "featured": false,
+      "section": "work"
+    },
+    {
       "id": "work-analysis-meshchunk-sync-issue",
       "title": "MeshChunk 难复现同步问题",
       "summary": "工作文档 · 分析报告",

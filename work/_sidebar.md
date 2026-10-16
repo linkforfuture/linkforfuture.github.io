@@ -36,6 +36,7 @@
   - [设备形态因子分析](topo/device-form-factor.md)
 
 - 分析报告
+  - [HCCL 跨流 Notify 超时与 NCCL 保序](analysis/hccl-shared-comm-notify-nccl-ordering.md)
   - [MeshChunk 难复现同步问题](analysis/meshchunk-sync-issue.md)
   - [AllGather NHR 优化分析](analysis/allgather-nhr-optimization-analysis.md)
   - [ParallelExecutor 切分审查报告](analysis/parallel-executor-split-review.md)
