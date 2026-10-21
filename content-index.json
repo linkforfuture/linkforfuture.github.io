@@ -801,6 +801,20 @@
       "section": "learning"
     },
     {
+      "id": "leetcode-solutions-0046-permutations",
+      "title": "46. 全排列",
+      "summary": "原地交换生成全排列，区分同层递增的 i 与保持不变的 step，理解递归返回后的交换还原。",
+      "topic": "algorithms",
+      "kind": "学习笔记",
+      "source": "leetcode/solutions/0046-permutations.md",
+      "url": "leetcode/#/solutions/0046-permutations",
+      "collection": "leetcode",
+      "group": "回溯",
+      "updated": "2026-10-21",
+      "featured": false,
+      "section": "learning"
+    },
+    {
       "id": "leetcode-solutions-0073-set-matrix-zeroes",
       "title": "73. 矩阵置零",
       "summary": "算法与数据结构 · 原地标记",
