@@ -857,6 +857,20 @@
       "section": "learning"
     },
     {
+      "id": "leetcode-solutions-0543-diameter-of-binary-tree",
+      "title": "543. 二叉树的直径",
+      "summary": "区分向父节点返回的最大深度与用于更新答案的最长路径，理解 L + R + 1、max(L, R) + 1，以及节点数和边数的换算。",
+      "topic": "algorithms",
+      "kind": "学习笔记",
+      "source": "leetcode/solutions/0543-diameter-of-binary-tree.md",
+      "url": "leetcode/#/solutions/0543-diameter-of-binary-tree",
+      "collection": "leetcode",
+      "group": "树与递归",
+      "updated": "2026-10-23",
+      "featured": false,
+      "section": "learning"
+    },
+    {
       "id": "leetcode-solutions-0239-sliding-window-maximum",
       "title": "239. 滑动窗口最大值",
       "summary": "算法与数据结构 · 单调队列",

@@ -19,6 +19,7 @@
 
 - 树与递归
   - [226. 翻转二叉树](solutions/0226-invert-binary-tree.md)
+  - [543. 二叉树的直径](solutions/0543-diameter-of-binary-tree.md)
 
 - 单调队列
   - [239. 滑动窗口最大值](solutions/0239-sliding-window-maximum.md)

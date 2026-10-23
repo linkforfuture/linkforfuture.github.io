@@ -18,6 +18,7 @@
 | 200 | [岛屿数量](solutions/0200-number-of-islands.md) | 中等 | 广度优先搜索 · 深度优先搜索 · 网格泛洪 |
 | 226 | [翻转二叉树](solutions/0226-invert-binary-tree.md) | 简单 | 树 · 递归 |
 | 239 | [滑动窗口最大值](solutions/0239-sliding-window-maximum.md) | 困难 | 单调队列 · 滑动窗口 |
+| 543 | [二叉树的直径](solutions/0543-diameter-of-binary-tree.md) | 简单 | 树 · 递归 · 深度优先搜索 |
 
 > 🎬 带交互图解的题目：[226. 翻转二叉树](demos/0226-invert-binary-tree.html ':ignore :target=_blank') —— 把调用栈摊开，单步看递归怎么下降、触底、带着翻好的子树回来；[239. 滑动窗口最大值](demos/0239-sliding-window-maximum.html ':ignore :target=_blank') —— 逐步动画演示 `deque` 的每一次进出队。
 
